@@ -124,8 +124,8 @@ hcloud ssh-key create --name home-cluster --public-key "$SSH_PUBLIC_KEY"
 hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-1 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
 hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-2 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
 hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-3 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
-# hcloud server create --datacenter fsn1-dc14 --type cx11 --name client-1 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
-# hcloud server create --datacenter fsn1-dc14 --type cx11 --name client-2 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+hcloud server create --datacenter fsn1-dc14 --type cx11 --name client-1 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+hcloud server create --datacenter fsn1-dc14 --type cx11 --name client-2 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
 
 # Create firewall
 hcloud firewall create --name firewall-nomad
@@ -146,15 +146,15 @@ hcloud firewall add-rule firewall-nomad --description "Allow NTP UDP Out" --dire
 hcloud firewall apply-to-resource firewall-nomad --type server --server server-1
 hcloud firewall apply-to-resource firewall-nomad --type server --server server-2
 hcloud firewall apply-to-resource firewall-nomad --type server --server server-3
-# hcloud firewall apply-to-resource firewall-nomad --type server --server client-1
-# hcloud firewall apply-to-resource firewall-nomad --type server --server client-2
+hcloud firewall apply-to-resource firewall-nomad --type server --server client-1
+hcloud firewall apply-to-resource firewall-nomad --type server --server client-2
 
 # Check the connections and accept the keys when prompted
 hcloud server ssh server-1
 hcloud server ssh server-2
 hcloud server ssh server-3
-# hcloud server ssh client-1
-# hcloud server ssh client-2
+hcloud server ssh client-1
+hcloud server ssh client-2
 
 # add the server IPs to .envrc
 export SERVER_1_IP= # get it with `hcloud server ip server-1`
@@ -163,8 +163,10 @@ export SERVER_3_IP= # get it with `hcloud server ip server-3`
 export CLIENT_1_IP= # get it with `hcloud server ip client-1`
 export CLIENT_2_IP= # get it with `hcloud server ip client-2`
 export SERVER_1_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.2 from `hcloud server describe server-1 | grep IP`
-export SERVER_2_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.3 from `hcloud server describe server-1 | grep IP`
-export SERVER_3_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.4 from `hcloud server describe server-1 | grep IP`
+export SERVER_2_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.3 from `hcloud server describe server-2 | grep IP`
+export SERVER_3_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.4 from `hcloud server describe server-3 | grep IP`
+export CLIENT_1_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.5 from `hcloud server describe client-1 | grep IP`
+export CLIENT_2_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.6 from `hcloud server describe client-2 | grep IP`
 
 direnv allow
 ```
@@ -174,12 +176,12 @@ direnv allow
 Decided to give GlusterFS a go since it is easy to set up, light weight and integrates into Nomad through CSI.
 
 ```sh
-# connect to the node
+# connect to the server node
 hcloud server ssh server-x # replace x with 1 to 3
 
 # download and install glusterfs
 apt-get update && apt-get install -y gnupg2
-wget -O - https://download.gluster.org/pub/gluster/glusterfs/9/rsa.pub | apt-key add -
+wget -O - https://download.gluster.org/pub/gluster/glusterfs/10/rsa.pub | apt-key add -
 DEBID=$(grep 'VERSION_ID=' /etc/os-release | cut -d '=' -f 2 | tr -d '"')
 DEBVER=$(grep 'VERSION=' /etc/os-release | grep -Eo '[a-z]+')
 DEBARCH=$(dpkg --print-architecture)
@@ -222,7 +224,7 @@ gluster volume start nomadvol
 gluster volume info
 ```
 
-On all three nodes, mount the newly created GlusterFS volume:
+On all server nodes, mount the newly created GlusterFS volume:
 
 ```sh
 hcloud server ssh server-x # replace x with 1 to 3
@@ -238,14 +240,49 @@ mkdir /mnt/gluster-nomad/storagetest1
 echo "Hello World!" > /mnt/gluster-nomad/storagetest1/index.html
 ```
 
-Check the existence on all three servers:
+Check the existence on all server nodes:
 
 ```sh
 hcloud server ssh server-x # replace x with 1 to 3
 less /mnt/gluster-nomad/storagetest1/index.html
 ```
 
+Set up the clients:
+
+```sh
+# connect to the client node
+hcloud server ssh client-x # replace x with 1 to 2
+
+# download and install glusterfs
+apt-get update && apt-get install -y gnupg2
+wget -O - https://download.gluster.org/pub/gluster/glusterfs/10/rsa.pub | apt-key add -
+DEBID=$(grep 'VERSION_ID=' /etc/os-release | cut -d '=' -f 2 | tr -d '"')
+DEBVER=$(grep 'VERSION=' /etc/os-release | grep -Eo '[a-z]+')
+DEBARCH=$(dpkg --print-architecture)
+echo deb https://download.gluster.org/pub/gluster/glusterfs/LATEST/Debian/${DEBID}/${DEBARCH}/apt ${DEBVER} main > /etc/apt/sources.list.d/gluster.list
+apt update && apt install -y glusterfs-client
+
+# check the installation
+glusterfs --version
+
+# mount the storage pool
+mkdir -p /mnt/gluster-nomad
+export SERVER_1_IP_INTERNAL=GLUSTERFS_IP # set to the correct IP of one of the GlusterFS servers, e.g. 10.0.0.2
+echo "$SERVER_1_IP_INTERNAL:/nomadvol /mnt/gluster-nomad glusterfs defaults,_netdev 0 0" >> /etc/fstab
+mount /mnt/gluster-nomad
+
+# check if the data is available 
+less /mnt/gluster-nomad/storagetest1/index.html
+
+# done
+exit
+```
+
+Repeat the above steps for all clients.
+
 ### Nomad, Consul and Vault installation
+
+The installation is meant to be highly available so that if one of the servers goes down, the system should still function properly.
 
 Install [hashi-up](https://github.com/jsiebens/hashi-up):
 
@@ -262,6 +299,7 @@ hashi-up version
 Install Consul
 
 ```sh
+# server
 hashi-up consul install \
   --ssh-target-addr $SERVER_1_IP \
   --ssh-target-user $SSH_USER \
@@ -289,19 +327,96 @@ hashi-up consul install \
   --bootstrap-expect 3 \
   --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
 
+# clients
+hashi-up consul install \
+  --ssh-target-addr $CLIENT_1_IP \
+  --ssh-target-user $SSH_USER \
+  --ssh-target-key ~/.ssh/id_rsa \
+  --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
+
+hashi-up consul install \
+  --ssh-target-addr $CLIENT_2_IP \
+  --ssh-target-user $SSH_USER \
+  --ssh-target-key ~/.ssh/id_rsa \
+  --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
+
 # Check that all services are up and consul is running:
 hcloud server ssh server-1
 consul members
+exit
 ```
 
 Install Vault
 
 ```sh
+hashi-up vault install \
+    --ssh-target-addr $SERVER_1_IP \
+    --ssh-target-user $SSH_USER \
+    --ssh-target-key ~/.ssh/id_rsa \
+    --storage consul \
+    --api-addr http://$SERVER_1_IP_INTERNAL:8200
 
+hashi-up vault install \
+    --ssh-target-addr $SERVER_2_IP \
+    --ssh-target-user $SSH_USER \
+    --ssh-target-key ~/.ssh/id_rsa \
+    --storage consul \
+    --api-addr http://$SERVER_2_IP_INTERNAL:8200
+
+hashi-up vault install \
+    --ssh-target-addr $SERVER_3_IP \
+    --ssh-target-user $SSH_USER \
+    --ssh-target-key ~/.ssh/id_rsa \
+    --storage consul \
+    --api-addr http://$SERVER_3_IP_INTERNAL:8200
+
+# Check that all services are up and consul is running for each server:
+hcloud server ssh server-x # replace x with 1 to 3
+systemctl status vault
+exit
 ```
 
 Install Nomad
 
 ```sh
+# server
+hashi-up nomad install \
+  --ssh-target-addr $SERVER_1_IP \
+  --ssh-target-user $SSH_USER \
+  --ssh-target-key ~/.ssh/id_rsa \
+  --server \
+  --bootstrap-expect 3
+   
+hashi-up nomad install \
+  --ssh-target-addr $SERVER_2_IP \
+  --ssh-target-user $SSH_USER \
+  --ssh-target-key ~/.ssh/id_rsa \
+  --server \
+  --bootstrap-expect 3
 
+hashi-up nomad install \
+  --ssh-target-addr $SERVER_3_IP \
+  --ssh-target-user $SSH_USER \
+  --ssh-target-key ~/.ssh/id_rsa \
+  --server \
+  --bootstrap-expect 3
+
+# clients
+hashi-up nomad install \
+  --ssh-target-addr $CLIENT_1_IP \
+  --ssh-target-user $SSH_USER \
+  --ssh-target-key ~/.ssh/id_rsa \
+  --client
+  
+hashi-up nomad install \
+  --ssh-target-addr $CLIENT_2_IP \
+  --ssh-target-user $SSH_USER \
+  --ssh-target-key ~/.ssh/id_rsa \
+  --client
+
+# check the cluster
+hcloud server ssh server-1
+nomad server members
+nomad node status
+exit
 ```
