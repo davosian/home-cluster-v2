@@ -13,7 +13,7 @@ For an initial testing and for everyone else to reproduce, I am using [Hetzner](
 
 - [X] Provision hardware
 - [X] Provide storage
-- [ ] Install nomad, consul and vault
+- [X] Install nomad, consul and vault
 - [ ] Test storage in nomad
 - [ ] Setup ingress with test load
 - 
