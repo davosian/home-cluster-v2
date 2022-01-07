@@ -1,3 +1,12 @@
 export HCLOUD_TOKEN= # create read/write at https://console.hetzner.cloud/projects/PROJECTID/security/tokens
 export HCLOUD_CONTEXT= # the instructions use `home-cluster`
 export SSH_PUBLIC_KEY="" # paste the content from `~/.ssh/id_rsa.pub` here (in double quotes, without `user@server` at the end)
+export SSH_USER= # most likely `root` since other ones have not been tested
+export SERVER_1_IP= # get it with `hcloud server ip server-1`
+export SERVER_2_IP= # get it with `hcloud server ip server-2`
+export SERVER_3_IP= # get it with `hcloud server ip server-3`
+export CLIENT_1_IP= # get it with `hcloud server ip client-1`
+export CLIENT_2_IP= # get it with `hcloud server ip client-2`
+export SERVER_1_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.2 from `hcloud server describe server-1 | grep IP`
+export SERVER_2_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.3 from `hcloud server describe server-1 | grep IP`
+export SERVER_3_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.4 from `hcloud server describe server-1 | grep IP`

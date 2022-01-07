@@ -7,8 +7,7 @@ This repository is currently under heavy development as it tracks my various att
 
 I am using [Ubuntu Multipass](https://multipass.run/) for a local development environment. This ensures that we a clean, reproducable base line. Vagrant is not an option since I am using an M1 based Mac and there is no good virtualization support that plays nicely with Vagrant.
 
-For an initial testing and for everyone else to reproduce, I am using Hetzner to build up a virtual cluster before erasing my current set of servers running at home.
-
+For an initial testing and for everyone else to reproduce, I am using [Hetzner](https://www.hetzner.com) to build up a virtual cluster before erasing my current set of servers running at home.
 
 ### Progress
 
@@ -19,13 +18,13 @@ For an initial testing and for everyone else to reproduce, I am using Hetzner to
 - [ ] Setup ingress with test load
 - 
 
+
+## References
+
+- [Tutorial: ](https://community.hetzner.com/tutorials/k3s-glusterfs-loadbalancer)
+
+
 ## Test environment
-
-We will be using a set of VMs on [Hetzner](https://www.hetzner.com).
-
-### References
-
-[Tutorial: ](https://community.hetzner.com/tutorials/k3s-glusterfs-loadbalancer)
 
 ### Development environment provisioning
 
@@ -96,6 +95,7 @@ source <(hcloud completion bash)
 export HCLOUD_TOKEN=YOUR_TOKEN
 export HCLOUD_CONTEXT=home-cluster
 export SSH_PUBLIC_KEY=YOUR_KEY
+export SSH_USER=root
 
 direnv allow
 
@@ -155,6 +155,18 @@ hcloud server ssh server-2
 hcloud server ssh server-3
 # hcloud server ssh client-1
 # hcloud server ssh client-2
+
+# add the server IPs to .envrc
+export SERVER_1_IP= # get it with `hcloud server ip server-1`
+export SERVER_2_IP= # get it with `hcloud server ip server-2`
+export SERVER_3_IP= # get it with `hcloud server ip server-3`
+export CLIENT_1_IP= # get it with `hcloud server ip client-1`
+export CLIENT_2_IP= # get it with `hcloud server ip client-2`
+export SERVER_1_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.2 from `hcloud server describe server-1 | grep IP`
+export SERVER_2_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.3 from `hcloud server describe server-1 | grep IP`
+export SERVER_3_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.4 from `hcloud server describe server-1 | grep IP`
+
+direnv allow
 ```
 
 ### Storage
@@ -192,8 +204,8 @@ Let's make server-1 the master node and add the other nodes as peers:
 
 ```sh
 hcloud server ssh server-1
-gluster peer probe 10.0.0.3
-gluster peer probe 10.0.0.4
+gluster peer probe $SERVER_2_IP_INTERNAL
+gluster peer probe $SERVER_3_IP_INTERNAL
 gluster peer status
 ```
 
@@ -202,9 +214,9 @@ Next create the volume. Also only run this on the master node.
 ```sh
 hcloud server ssh server-1
 gluster volume create nomadvol replica 3 \
-    10.0.0.2:/data/glusterfs/nomad/brick1/brick \
-    10.0.0.3:/data/glusterfs/nomad/brick1/brick \
-    10.0.0.4:/data/glusterfs/nomad/brick1/brick \
+    $SERVER_1_IP_INTERNAL:/data/glusterfs/nomad/brick1/brick \
+    $SERVER_2_IP_INTERNAL:/data/glusterfs/nomad/brick1/brick \
+    $SERVER_3_IP_INTERNAL:/data/glusterfs/nomad/brick1/brick \
     force
 gluster volume start nomadvol
 gluster volume info
@@ -233,3 +245,63 @@ hcloud server ssh server-x # replace x with 1 to 3
 less /mnt/gluster-nomad/storagetest1/index.html
 ```
 
+### Nomad, Consul and Vault installation
+
+Install [hashi-up](https://github.com/jsiebens/hashi-up):
+
+```sh
+# connect to the dev server
+multipass start dev
+multipass shell dev
+
+# install hashi-up
+curl -sLS https://get.hashi-up.dev | sudo sh
+hashi-up version
+```
+
+Install Consul
+
+```sh
+hashi-up consul install \
+  --ssh-target-addr $SERVER_1_IP \
+  --ssh-target-user $SSH_USER \
+  --ssh-target-key ~/.ssh/id_rsa \
+  --server \
+  --client-addr 0.0.0.0 \
+  --bootstrap-expect 3 \
+  --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
+  
+hashi-up consul install \
+  --ssh-target-addr $SERVER_2_IP \
+  --ssh-target-user $SSH_USER \
+  --ssh-target-key ~/.ssh/id_rsa \
+  --server \
+  --client-addr 0.0.0.0 \
+  --bootstrap-expect 3 \
+  --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
+  
+hashi-up consul install \
+  --ssh-target-addr $SERVER_3_IP \
+  --ssh-target-user $SSH_USER \
+  --ssh-target-key ~/.ssh/id_rsa \
+  --server \
+  --client-addr 0.0.0.0 \
+  --bootstrap-expect 3 \
+  --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
+
+# Check that all services are up and consul is running:
+hcloud server ssh server-1
+consul members
+```
+
+Install Vault
+
+```sh
+
+```
+
+Install Nomad
+
+```sh
+
+```
