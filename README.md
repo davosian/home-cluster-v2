@@ -5,6 +5,8 @@ Cluster running apps and services for my smarthome
 
 This repository is currently under heavy development as it tracks my various attemps for setting up the services. In a first step, all installation will be done manually and this document serves as a notebook to record the steps taken and the resources consulted.
 
+> **Disclaimer:** I am new to Nomad, Consul and Vault, so do not take this setup as best practice. It might contain serious security holes! Should you find issues with this setup, please open an [issue](https://github.com/davosian/home-cluster-v2/issues) or [propose a fix (PR)](https://github.com/davosian/home-cluster-v2/pulls).
+
 I am using [Ubuntu Multipass](https://multipass.run/) for a local development environment. This ensures that we a clean, reproducable base line. Vagrant is not an option since I am using an M1 based Mac and there is no good virtualization support that plays nicely with Vagrant.
 
 For an initial testing and for everyone else to reproduce, I am using [Hetzner](https://www.hetzner.com) to build up a virtual cluster before erasing my current set of servers running at home.
@@ -14,6 +16,9 @@ For an initial testing and for everyone else to reproduce, I am using [Hetzner](
 - [X] Provision hardware
 - [X] Provide storage
 - [X] Install nomad, consul and vault
+- [X] VPN access to the cluster
+- [X] Initial configuration for Vault
+- [ ] Ingress setup
 - [ ] Test storage in nomad
 - [ ] Setup ingress with test load
 - 
@@ -296,7 +301,7 @@ curl -sLS https://get.hashi-up.dev | sudo sh
 hashi-up version
 ```
 
-Install Consul
+#### Install Consul
 
 ```sh
 # server
@@ -346,7 +351,13 @@ consul members
 exit
 ```
 
-Install Vault
+The installation sets up the following configuration:
+
+- `consul` binary put into `/usr/local/bin`
+- configuration put into `/etc/consul.d/consul.hcl`
+- certificates and other resources are put into `/etc/consul.d` and `/opt/consul`
+
+#### Install Vault
 
 ```sh
 hashi-up vault install \
@@ -376,7 +387,13 @@ systemctl status vault
 exit
 ```
 
-Install Nomad
+The installation sets up the following configuration:
+
+- `vault` binary put into `/usr/local/bin`
+- configuration put into `/etc/vault.d/vault.hcl`
+- certificates and other resources are put into `/etc/vault.d` and `/opt/vault`
+
+ #### Install Nomad
 
 ```sh
 # server
@@ -419,4 +436,151 @@ hcloud server ssh server-1
 nomad server members
 nomad node status
 exit
+```
+
+The installation sets up the following configuration:
+
+- `nomad` binary put into `/usr/local/bin`
+- configuration put into `/etc/nomad.d/nomad.hcl`
+- certificates and other resources are put into `/etc/nomad.d` and `/opt/nomad`
+
+### VPN
+
+I will be setting up Zerotier since I have been using it in the past successfully.
+
+Create an account and a new network under https://my.zerotier.com. Take note of the network ID.
+
+[Download and install ZeroTier](https://www.zerotier.com/download/) on your host (not inside the multipass VM since we want our browser to access the services). Join the network from the host using the Zerotier UI or the CLI.
+
+Open the firewall for Zerotier:
+
+```sh
+# Allow incoming ZeroTier
+hcloud firewall add-rule firewall-nomad --description "Allow ZeroTier In" --direction in --port 9993 --protocol udp --source-ips 0.0.0.0/0 --source-ips ::/0
+
+# Allow outgoing ZeroTier
+hcloud firewall add-rule firewall-nomad --description "Allow ZeroTier Out" --direction out --port 9993 --protocol udp --destination-ips 0.0.0.0/0 --destination-ips ::/0
+```
+
+Install the ZeroTier client on all nodes:
+
+```sh
+hcloud server ssh any-x # replace any with `client` or `server` and x with 1 to 3
+curl -s https://install.zerotier.com | sudo bash
+zerotier-cli join NETWORK_ID
+```
+
+Install the ZeroTier client on the dev VM:
+
+```sh
+multipass start dev
+multipass shell dev
+curl -s https://install.zerotier.com | sudo bash
+sudo zerotier-cli join NETWORK_ID
+```
+
+Approve all joining requests on https://my.zerotier.com/ and give the nodes names that help you identify them. All clients should be online now with IPs assigned.
+
+Test the access: take note of an IP for one of the server nodes. On your local machine try to access the web UIs:
+
+- Nomad: http://SERVER_IP_ZEROTIER:4646/
+- Consul: http://SERVER_IP_ZEROTIER:8500/
+- Vault: http://SERVER_IP_ZEROTIER:8200/
+
+Note that Consul is not yet happy with the Vault server since that one is still lacking the initial configuration.
+
+Add the ZeroTier IPs to our environment variables so that we can interact with the cluster from externally:
+
+```sh
+# add the ZeroTier server IPs to .envrc
+export ZT_SERVER_1_IP=ZEROTIER_IP # get it at https://my.zerotier.com`
+export ZT_SERVER_2_IP=ZEROTIER_IP # get it at https://my.zerotier.com`
+export ZT_SERVER_3_IP=ZEROTIER_IP # get it at https://my.zerotier.com`
+export ZT_CLIENT_1_IP=ZEROTIER_IP # get it at https://my.zerotier.com`
+export ZT_CLIENT_2_IP=ZEROTIER_IP # get it at https://my.zerotier.com`
+```
+
+### Vault configuration
+
+Each node of the vault cluster has to be unsealed first before it can be used.
+
+On your host, connect to the ZeroTier network, then using your browser connect to the Vault UI for `server-1` at http://SERVER_IP_ZEROTIER:8200/.
+
+Enter `5` for the `Key shares` and `3` for the `Key threshold`, then click on `Initialize`.
+
+On the next page, click on `Download keys` and store them in a password manager. Click on `Continue to Unseal`.
+
+The next few steps have to be repeated for each Vault node.
+
+Copy one of the `keys` (not `keys_base64`) and enter it in the `Master Key Portion` field. Click `Unseal` to proceed. Repeat until you have entered 3 keys.
+
+In order to unseal the vaults on each server, repeat the login steps for `server-2` and `server-3`.
+
+Optionally, after unsealing, you can enter the `root_token` from the password file and click on `Sign In` to get access to the web UI.
+
+When you are done, you should see that the Vault server status switched to green in the Consul web ui over at http://SERVER_IP_ZEROTIER:8500/.
+
+On the command line, you can now also check the vault status:
+
+```sh
+hcloud server ssh server-1
+export VAULT_ADDR='http://127.0.0.1:8200'
+export VAULT_TOKEN="ROOT_TOKEN_FROM_FILE"
+vault status
+```
+
+### Install the CLIs on the dev VM
+
+In order to interact easier with Nomad and the other services, we install the CLIs on our multipass VM:
+
+```sh
+multipass start dev
+multipass shell dev
+
+curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
+sudo apt-add-repository "deb [arch=arm64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
+sudo apt-get update && sudo apt-get install nomad consul vault
+```
+
+Check the connection (make sure the dev VM is connected to ZeroTier):
+
+```sh
+# make sure VAULT_ADDR is set in `.envrc` so it connects remotely
+vault status
+# make sure CONSUL_HTTP_ADDR is set in `.envrc` so it connects remotely
+consul members
+# make sure NOMAD_ADDR is set in `.envrc` so it connects remotely
+nomad server members
+```
+
+### Ingress setup
+
+> **This section is still work in progress**
+
+Install and configure Traefik
+
+```sh
+# install a sample web app
+nomad run nomad/jobs/webapp.nomad
+```
+
+Prepare a load balancer to direct traffic to the servers.
+
+```sh
+# create the loadbalancer
+hcloud load-balancer create --type lb11 --location fsn1 --name lb-nomad
+hcloud load-balancer attach-to-network --network network-nomad --ip 10.0.0.254 lb-nomad
+
+# direct traffic to the server
+hcloud load-balancer add-target lb-nomad --server server-1 --use-private-ip
+hcloud load-balancer add-target lb-nomad --server server-2 --use-private-ip
+hcloud load-balancer add-target lb-nomad --server server-3 --use-private-ip
+
+# manage certificates
+hcloud certificate create --domain <example.com> --type managed --name cert-t1
+hcloud certificate list
+
+# proxy and health check
+hcloud load-balancer add-service lb-nomad --protocol https --http-redirect-http --proxy-protocol --http-certificates <certificate_id> # use the id from the step before
+hcloud load-balancer update-service lb-nomad --listen-port 443 --health-check-http-domain <example.com>
 ```
