@@ -48,7 +48,7 @@ Prepare the local environment:
 ```sh
 sudo apt update
 sudo apt upgrade
-sudo apt install -y direnv neovim
+sudo apt install -y unzip direnv neovim
 
 # create a ssh key without passphrase for convenience
 ssh-keygen
@@ -444,6 +444,23 @@ The installation sets up the following configuration:
 - configuration put into `/etc/nomad.d/nomad.hcl`
 - certificates and other resources are put into `/etc/nomad.d` and `/opt/nomad`
 
+Install docker for nomad to use on all clients:
+
+```
+# connect to the client node
+hcloud server ssh client-x # replace x with 1 to 2
+
+curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+apt-get update
+apt-get install docker-ce docker-ce-cli containerd.io
+
+# test
+docker run hello-world
+```
+
 ### VPN
 
 I will be setting up Zerotier since I have been using it in the past successfully.
@@ -531,24 +548,43 @@ vault status
 
 ### Install the CLIs on the dev VM
 
-In order to interact easier with Nomad and the other services, we install the CLIs on our multipass VM:
+In order to interact easier with Nomad and the other services, we install the CLIs on our multipass VM. Since the Ubuntu packages are outdated, we install the binaries directly:
 
 ```sh
 multipass start dev
 multipass shell dev
+cd ~/dl
 
-curl -fsSL https://apt.releases.hashicorp.com/gpg | sudo apt-key add -
-sudo apt-add-repository "deb [arch=arm64] https://apt.releases.hashicorp.com $(lsb_release -cs) main"
-sudo apt-get update && sudo apt-get install nomad consul vault
+curl -OL https://releases.hashicorp.com/nomad/1.2.3/nomad_1.2.3_linux_arm64.zip
+unzip nomad_1.2.3_linux_arm64.zip
+sudo mv nomad /usr/local/bin
+rm nomad_1.2.3_linux_arm64.zip
+nomad -v
+
+curl -OL https://releases.hashicorp.com/vault/1.9.2/vault_1.9.2_linux_arm64.zip
+unzip vault_1.9.2_linux_arm64.zip
+sudo mv vault /usr/local/bin
+rm vault_1.9.2_linux_arm64.zip
+vault -v
+
+curl -OL https://releases.hashicorp.com/consul/1.11.1/consul_1.11.1_linux_arm64.zip
+unzip consul_1.11.1_linux_arm64.zip
+sudo mv consul /usr/local/bin
+rm consul_1.11.1_linux_arm64.zip
+consul -v
 ```
 
 Check the connection (make sure the dev VM is connected to ZeroTier):
 
 ```sh
+cd ~/src/home-cluster-v2/
+
 # make sure VAULT_ADDR is set in `.envrc` so it connects remotely
 vault status
+
 # make sure CONSUL_HTTP_ADDR is set in `.envrc` so it connects remotely
 consul members
+
 # make sure NOMAD_ADDR is set in `.envrc` so it connects remotely
 nomad server members
 ```
@@ -561,7 +597,10 @@ Install and configure Traefik
 
 ```sh
 # install a sample web app
-nomad run nomad/jobs/webapp.nomad
+nomad run nomad/jobs/demo-webapp.nomad
+
+# install traefik as load balancer
+nomad run nomad/jobs/traefik.nomad
 ```
 
 Prepare a load balancer to direct traffic to the servers.
