@@ -1,0 +1,3 @@
+export HCLOUD_TOKEN= # create read/write at https://console.hetzner.cloud/projects/PROJECTID/security/tokens
+export HCLOUD_CONTEXT= # the instructions use `home-cluster`
+export SSH_PUBLIC_KEY="" # paste the content from `~/.ssh/id_rsa.pub` here (in double quotes, without `user@server` at the end)
