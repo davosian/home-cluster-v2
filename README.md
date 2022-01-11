@@ -601,6 +601,52 @@ consul members
 nomad server members
 ```
 
+### DNS setup
+
+In order to resolve `.consul` domain names, we have to configure a local DNS server for each client node:
+
+```sh
+# connect to the client node
+hcloud server ssh client-x # replace x with 1 to 2
+
+# add the localhost as nameserver
+vi /etc/resolv.conf
+
+# add as the first line
+nameserver 127.0.0.1
+
+# install dig and dnsmasq
+apt install dnsutils dnsmasq
+
+# configure dnsmasq
+vi /etc/dnsmasq.d/10-consul
+
+# insert the following snippet
+# Enable forward lookup of the 'consul' domain:
+server=/consul/127.0.0.1#8600
+
+# Uncomment and modify as appropriate to enable reverse DNS lookups for
+# common netblocks found in RFC 1918, 5735, and 6598:
+#rev-server=0.0.0.0/8,127.0.0.1#8600
+rev-server=10.0.0.0/8,127.0.0.1#8600
+#rev-server=100.64.0.0/10,127.0.0.1#8600
+#rev-server=127.0.0.1/8,127.0.0.1#8600
+#rev-server=169.254.0.0/16,127.0.0.1#8600
+#rev-server=172.16.0.0/12,127.0.0.1#8600
+#rev-server=192.168.0.0/16,127.0.0.1#8600
+#rev-server=224.0.0.0/4,127.0.0.1#8600
+#rev-server=240.0.0.0/4,127.0.0.1#8600
+
+# restart the service
+systemctl restart dnsmasq.service
+
+# test
+dig @127.0.0.1 -p 8600 consul.service.consul ANY
+curl -L http://consul.service.consul:8500
+```
+
+Repeat above setup for all clients.
+
 ### Ingress setup
 
 > **This section is still work in progress**
