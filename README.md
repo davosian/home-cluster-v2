@@ -53,6 +53,7 @@ sudo apt install -y unzip direnv neovim
 # create a ssh key without passphrase for convenience
 ssh-keygen
 
+# configure direnv
 # add to the bottom of ~/.bashrc
 eval "$(direnv hook bash)"
 
@@ -92,6 +93,9 @@ rm -f CHANGES.md LICENSE README.md hcloud hcloud-linux-arm64.tar.gz
 # add to the bottom of ~/.bashrc
 source <(hcloud completion bash)
 
+# reload the shell
+source ~/.bashrc
+
 # prepare the hcloud cli
 # first follow the steps from https://github.com/hetznercloud/cli, then continue here
 
@@ -126,11 +130,11 @@ hcloud placement-group create --name group-spread --type spread
 hcloud ssh-key create --name home-cluster --public-key "$SSH_PUBLIC_KEY"
 
 # Create VMs
-hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-1 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
-hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-2 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
-hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-3 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
-hcloud server create --datacenter fsn1-dc14 --type cx11 --name client-1 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
-hcloud server create --datacenter fsn1-dc14 --type cx11 --name client-2 --image debian-11 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-1 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-2 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-3 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+hcloud server create --datacenter fsn1-dc14 --type cx11 --name client-1 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+hcloud server create --datacenter fsn1-dc14 --type cx11 --name client-2 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
 
 # Create firewall
 hcloud firewall create --name firewall-nomad
@@ -155,11 +159,21 @@ hcloud firewall apply-to-resource firewall-nomad --type server --server client-1
 hcloud firewall apply-to-resource firewall-nomad --type server --server client-2
 
 # Check the connections and accept the keys when prompted
+# Update debian to the latest patches
 hcloud server ssh server-1
+apt update && apt upgrade -y
+
 hcloud server ssh server-2
+apt update && apt upgrade -y
+
 hcloud server ssh server-3
+apt update && apt upgrade -y
+
 hcloud server ssh client-1
+apt update && apt upgrade -y
+
 hcloud server ssh client-2
+apt update && apt upgrade -y
 
 # add the server IPs to .envrc
 export SERVER_1_IP= # get it with `hcloud server ip server-1`
@@ -211,8 +225,8 @@ Let's make server-1 the master node and add the other nodes as peers:
 
 ```sh
 hcloud server ssh server-1
-gluster peer probe $SERVER_2_IP_INTERNAL
-gluster peer probe $SERVER_3_IP_INTERNAL
+gluster peer probe 10.0.0.3 # $SERVER_2_IP_INTERNAL
+gluster peer probe 10.0.0.4 # $SERVER_3_IP_INTERNAL
 gluster peer status
 ```
 
@@ -221,9 +235,9 @@ Next create the volume. Also only run this on the master node.
 ```sh
 hcloud server ssh server-1
 gluster volume create nomadvol replica 3 \
-    $SERVER_1_IP_INTERNAL:/data/glusterfs/nomad/brick1/brick \
-    $SERVER_2_IP_INTERNAL:/data/glusterfs/nomad/brick1/brick \
-    $SERVER_3_IP_INTERNAL:/data/glusterfs/nomad/brick1/brick \
+    10.0.0.2:/data/glusterfs/nomad/brick1/brick \ # $SERVER_1_IP_INTERNAL
+    10.0.0.3:/data/glusterfs/nomad/brick1/brick \ # $SERVER_2_IP_INTERNAL
+    10.0.0.4:/data/glusterfs/nomad/brick1/brick \ # $SERVER_3_IP_INTERNAL
     force
 gluster volume start nomadvol
 gluster volume info
@@ -446,7 +460,7 @@ The installation sets up the following configuration:
 
 Install docker for nomad to use on all clients:
 
-```
+```sh
 # connect to the client node
 hcloud server ssh client-x # replace x with 1 to 2
 
@@ -454,8 +468,7 @@ curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
   $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-apt-get update
-apt-get install docker-ce docker-ce-cli containerd.io
+apt-get update && apt-get install docker-ce docker-ce-cli containerd.io
 
 # test
 docker run hello-world
@@ -542,7 +555,6 @@ On the command line, you can now also check the vault status:
 ```sh
 hcloud server ssh server-1
 export VAULT_ADDR='http://127.0.0.1:8200'
-export VAULT_TOKEN="ROOT_TOKEN_FROM_FILE"
 vault status
 ```
 
@@ -599,8 +611,21 @@ Install and configure Traefik
 # install a sample web app
 nomad run nomad/jobs/demo-webapp.nomad
 
-# install traefik as load balancer
+# install traefik as load balancer. Verify that the job gets deployed succesfully.
 nomad run nomad/jobs/traefik.nomad
+
+# check that you can reach the traefik dashboard through curl or a local browser
+# use a ZT client ip to connect. If it is not working, try the other client IP
+curl -L http://$ZT_CLIENT_1_IP:8081
+
+# check that you can reach the load balanced app
+# again, experiment with all client ips
+# execute 6 times to see how the servers and/or ports change
+curl http://$ZT_CLIENT_1_IP:8080/myapp
+
+# check that load balancing is working
+hcloud server ssh server-1
+curl http://traefik.service.consul:8080/myapp
 ```
 
 Prepare a load balancer to direct traffic to the servers.
