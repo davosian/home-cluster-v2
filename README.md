@@ -46,6 +46,7 @@ multipass shell dev
 Prepare the local environment:
 
 ```sh
+# update the system
 sudo apt update
 sudo apt upgrade
 sudo apt install -y unzip direnv neovim
@@ -83,7 +84,7 @@ Install the [Hetzner CLI](https://github.com/hetznercloud/cli):
 ```sh
 # install hcloud manually since the one from apt is outdated and 
 # does not work with the following instructions
-mkdir ~/dl && cd ~/dl
+cd ~/dl
 # note: get the latest release for your platform from https://github.com/hetznercloud/cli/releases
 curl -OL https://github.com/hetznercloud/cli/releases/download/v1.29.0/hcloud-linux-arm64.tar.gz
 tar -xvf hcloud-linux-arm64.tar.gz
@@ -571,6 +572,8 @@ curl -OL https://releases.hashicorp.com/nomad/1.2.3/nomad_1.2.3_linux_arm64.zip
 unzip nomad_1.2.3_linux_arm64.zip
 sudo mv nomad /usr/local/bin
 rm nomad_1.2.3_linux_arm64.zip
+nomad -autocomplete-install
+complete -C /usr/local/bin/nomad nomad
 nomad -v
 
 curl -OL https://releases.hashicorp.com/vault/1.9.2/vault_1.9.2_linux_arm64.zip
@@ -601,6 +604,16 @@ consul members
 nomad server members
 ```
 
+Install Nomad Pack
+
+```sh
+cd ~/dl
+curl -OL https://github.com/hashicorp/nomad-pack/releases/download/nightly/nomad-pack_0.0.1-techpreview1_linux_arm64.zip
+unzip nomad-pack_0.0.1-techpreview1_linux_arm64.zip
+sudo mv nomad-pack /usr/local/bin
+rm nomad-pack_0.0.1-techpreview1_linux_arm64.zip
+```
+
 ### DNS setup
 
 In order to resolve `.consul` domain names, we have to configure a local DNS server for each client node:
@@ -616,7 +629,7 @@ vi /etc/resolv.conf
 nameserver 127.0.0.1
 
 # install dig and dnsmasq
-apt install dnsutils dnsmasq
+apt install -y dnsutils dnsmasq
 
 # configure dnsmasq
 vi /etc/dnsmasq.d/10-consul
