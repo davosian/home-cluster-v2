@@ -60,6 +60,8 @@ cd home-cluster-v2
 
 ### Automated setup
 
+> **Note:** These scripts are still incomplete, untested and contain bugs. Use the manual steps in the meantime.
+
 ```sh
 # provision the local environment
 task devsetup:install
