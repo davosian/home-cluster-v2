@@ -1,5 +1,5 @@
 version: '3'
 
-tasks:
-  devsetup: TaskDevsetup.yaml
-  cloudprovisioning: TaskCloudProvisioning.yaml
+includes:
+  devsetup: ./TaskDevsetup.yaml
+  cloudprovisioning: ./TaskCloudProvisioning.yaml
