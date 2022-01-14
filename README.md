@@ -330,6 +330,10 @@ exit
 
 Repeat the above steps for all clients.
 
+### Initial Backup
+
+At this point, it is a good idea to create snapshots of the VMs using the [Hetzner Web UI](https://console.hetzner.cloud/). This way, it is easy to go back to this state should you have to start over.
+
 ### Nomad, Consul and Vault installation
 
 The installation is meant to be highly available so that if one of the servers goes down, the system should still function properly.
