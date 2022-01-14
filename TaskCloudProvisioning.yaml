@@ -1,0 +1,81 @@
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      - task: install-network
+      - task: install-vms
+      - task: install-firewall
+      - task: apply-firewall-rules
+      - task: get-ips
+  install-network:
+    cmds:
+      - echo "Creating private network"
+      - hcloud network create --name network-nomad --ip-range 10.0.0.0/16
+      - hcloud network add-subnet network-nomad --network-zone eu-central --type server --ip-range 10.0.0.0/16
+  install-vms:
+    cmds:
+      - echo "Creating virtual machines"
+      - hcloud ssh-key create --name home-cluster --public-key-from-file ~/.ssh/id_rsa.pub
+      - hcloud placement-group create --name group-spread --type spread
+      - hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-1 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+      - hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-2 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+      - hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-3 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+      - hcloud server create --datacenter fsn1-dc14 --type cx11 --name client-1 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+      - hcloud server create --datacenter fsn1-dc14 --type cx11 --name client-2 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
+  install-firewall:
+    cmds:
+      - hcloud firewall create --name firewall-nomad
+      # Allow incoming SSH and ICMP
+      - hcloud firewall add-rule firewall-nomad --description "Allow SSH In" --direction in --port 22 --protocol tcp --source-ips 0.0.0.0/0 --source-ips ::/0
+      - hcloud firewall add-rule firewall-nomad --description "Allow ICMP In" --direction in --protocol icmp --source-ips 0.0.0.0/0 --source-ips ::/0
+      # Allow outgoing ICMP, DNS, HTTP, HTTPS and NTP
+      - hcloud firewall add-rule firewall-nomad --description "Allow ICMP Out" --direction out --protocol icmp --destination-ips 0.0.0.0/0 --destination-ips ::/0
+      - hcloud firewall add-rule firewall-nomad --description "Allow DNS TCP Out" --direction out --port 53 --protocol tcp --destination-ips 0.0.0.0/0 --destination-ips ::/0
+      - hcloud firewall add-rule firewall-nomad --description "Allow DNS UDP Out" --direction out --port 53 --protocol udp --destination-ips 0.0.0.0/0 --destination-ips ::/0
+      - hcloud firewall add-rule firewall-nomad --description "Allow HTTP Out" --direction out --port 80 --protocol tcp --destination-ips 0.0.0.0/0 --destination-ips ::/0
+      - hcloud firewall add-rule firewall-nomad --description "Allow HTTPS Out" --direction out --port 443 --protocol tcp --destination-ips 0.0.0.0/0 --destination-ips ::/0
+      - hcloud firewall add-rule firewall-nomad --description "Allow NTP UDP Out" --direction out --port 123 --protocol udp --destination-ips 0.0.0.0/0 --destination-ips ::/0
+  apply-firewall-rules:
+    cmds:
+      # Apply firewall rules to all servers
+      - hcloud firewall apply-to-resource firewall-nomad --type server --server server-1
+      - hcloud firewall apply-to-resource firewall-nomad --type server --server server-2
+      - hcloud firewall apply-to-resource firewall-nomad --type server --server server-3
+      - hcloud firewall apply-to-resource firewall-nomad --type server --server client-1
+      - hcloud firewall apply-to-resource firewall-nomad --type server --server client-2
+  get-ips:
+    cmds:
+      - echo "IPs from all nodes:"
+      - echo "server-1: $SERVER_1_IP"
+      - echo "server-2: $SERVER_2_IP"
+      - echo "server-3: $SERVER_3_IP"
+      - echo "client-1: $CLIENT_1_IP"
+      - echo "client-2: $CLIENT_2_IP"
+      - echo "server-1 internal: $SERVER_1_IP_INTERNAL"
+      - echo "server-2 internal: $SERVER_2_IP_INTERNAL"
+      - echo "server-3 internal: $SERVER_3_IP_INTERNAL"
+      - echo "client-1 internal: $CLIENT_1_IP_INTERNAL"
+      - echo "client-2 internal: $CLIENT_2_IP_INTERNAL"
+      - echo "Put them into `.envrc` and reload with `direnv allow`"
+    vars:
+      SERVER_1_IP:
+        sh: hcloud server ip server-1
+      SERVER_2_IP:
+        sh: hcloud server ip server-2
+      SERVER_3_IP:
+        sh: hcloud server ip server-3
+      CLIENT_1_IP:
+        sh: hcloud server ip client-1
+      CLIENT_1_IP:
+        sh: hcloud server ip client-2
+      SERVER_1_IP_INTERNAL:
+        sh: hcloud server describe -o json server-1 | jq -r .private_net[0].ip
+      SERVER_2_IP_INTERNAL:
+        sh: hcloud server describe -o json server-2 | jq -r .private_net[0].ip
+      SERVER_3_IP_INTERNAL:
+        sh: hcloud server describe -o json server-3 | jq -r .private_net[0].ip
+      CLIENT_1_IP_INTERNAL:
+        sh: hcloud server describe -o json client-1 | jq -r .private_net[0].ip
+      CLIENT_2_IP_INTERNAL:
+        sh: hcloud server describe -o json client-2 | jq -r .private_net[0].ip

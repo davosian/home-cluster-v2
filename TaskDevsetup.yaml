@@ -1,0 +1,31 @@
+version: '3'
+
+tasks:
+  install:
+    cmds:
+      - echo "updating the system"
+      - sudo apt update && sudo apt upgrade
+      - echo "installing required tools"
+      - sudo apt install -y unzip direnv neovim
+      - echo "creating an ssh key. Do not set a passphrase"
+      - ssh-keygen
+      - echo "configure direnv"
+      - echo 'eval "$(direnv hook bash)"' >> ~/.bashrc
+      - source ~/.bashrc
+      - echo "prepare the environment"
+      - cp ~/src/home-cluster-v2/.envrc.example ~/src/home-cluster-v2/.envrc
+      - direnv allow
+  cloudinstall:
+    cmds:
+      - echo "Installing the Hetzner CLI"
+      - mkdir -p ~/dl && cd dl
+      - curl -OL https://github.com/hetznercloud/cli/releases/download/v1.29.0/hcloud-linux-arm64.tar.gz
+      - tar -xvf hcloud-linux-arm64.tar.gz
+      - sudo mv hcloud /usr/local/bin
+      - rm -f CHANGES.md LICENSE README.md hcloud hcloud-linux-arm64.tar.gz
+      - echo "source <(hcloud completion bash)" >> ~/.bashrc
+      - source ~/.bashrc
+      - echo "now follow the steps from "https://github.com/hetznercloud/cli" and populate the `HCLOUD` variables in `.envrc`
+      - echo "populate the `SSH_` variables in `.envrc` (public key in double quotes, without `user@server`"
+      - direnv allow
+      - hcloud context create home-cluster

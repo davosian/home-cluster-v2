@@ -11,6 +11,8 @@ I am using [Ubuntu Multipass](https://multipass.run/) for a local development en
 
 For an initial testing and for everyone else to reproduce, I am using [Hetzner](https://www.hetzner.com) to build up a virtual cluster before erasing my current set of servers running at home.
 
+In order to simplify setting up the cluster, some basic automation is being done with [Task](https://taskfile.dev/#/).
+
 ### Progress
 
 - [X] Provision hardware
@@ -18,6 +20,7 @@ For an initial testing and for everyone else to reproduce, I am using [Hetzner](
 - [X] Install nomad, consul and vault
 - [X] VPN access to the cluster
 - [X] Initial configuration for Vault
+- [ ] Automate setup & provisioning with Task
 - [ ] Ingress setup
 - [ ] Test storage in nomad
 - [ ] Setup ingress with test load
@@ -46,9 +49,37 @@ multipass shell dev
 Prepare the local environment:
 
 ```sh
+# install task
+sudo sh -c "$(curl --location https://taskfile.dev/install.sh)" -- -d -b /usr/local/bin
+
+# get the sources
+mkdir -p ~/src && cd ~/src
+git clone https://github.com/davosian/home-cluster-v2.git
+cd home-cluster-v2
+```
+
+### Automated setup
+
+```sh
+# provision the local environment
+task devsetup:install
+
+# prepare the cloud integration
+task devsetup:cloudinstall
+
+# cloud provisioning
+task cloudprovisioning:install
+```
+
+### Manual setup
+
+In case you want to manually perform the steps, follow them in the sections below.
+
+### Provision the local environment
+
+```sh
 # update the system
-sudo apt update
-sudo apt upgrade
+sudo apt update && sudo apt upgrade
 sudo apt install -y unzip direnv neovim
 
 # create a ssh key without passphrase for convenience
@@ -61,17 +92,12 @@ eval "$(direnv hook bash)"
 # reload the shell
 source ~/.bashrc
 
-# get the sources
-mkdir ~/src && cd ~/src
-git clone https://github.com/davosian/home-cluster-v2.git
-cd home-cluster-v2
-
 # prepare the environment
 cp .envrc.example .envrc
 direnv allow
 ```
 
-### Hardware provisionig
+### Prepare the cloud integration
 
 Connect into the multipass VM if not done so already in the previous section. All other steps in this section will be performed inside this VM.
 
@@ -117,6 +143,8 @@ hcloud server-type list
 hcloud server list
 ```
 
+### Hardware provisionig
+
 Provision the cloud infrastructure:
 
 ```sh
@@ -128,7 +156,7 @@ hcloud network add-subnet network-nomad --network-zone eu-central --type server 
 hcloud placement-group create --name group-spread --type spread
 
 # Prepare a ssh key to use for connecting to the servers
-hcloud ssh-key create --name home-cluster --public-key "$SSH_PUBLIC_KEY"
+hcloud ssh-key create --name home-cluster --public-key-from-file ~/.ssh/id_rsa.pub
 
 # Create VMs
 hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-1 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
@@ -182,11 +210,11 @@ export SERVER_2_IP= # get it with `hcloud server ip server-2`
 export SERVER_3_IP= # get it with `hcloud server ip server-3`
 export CLIENT_1_IP= # get it with `hcloud server ip client-1`
 export CLIENT_2_IP= # get it with `hcloud server ip client-2`
-export SERVER_1_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.2 from `hcloud server describe server-1 | grep IP`
-export SERVER_2_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.3 from `hcloud server describe server-2 | grep IP`
-export SERVER_3_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.4 from `hcloud server describe server-3 | grep IP`
-export CLIENT_1_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.5 from `hcloud server describe client-1 | grep IP`
-export CLIENT_2_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.6 from `hcloud server describe client-2 | grep IP`
+export SERVER_1_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.2 from `hcloud server describe -o json server-1 | jq -r .private_net[0].ip`
+export SERVER_2_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.3 from `hcloud server describe -o json server-2 | jq -r .private_net[0].ip`
+export SERVER_3_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.4 from `hcloud server describe -o json server-3 | jq -r .private_net[0].ip`
+export CLIENT_1_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.5 from `hcloud server describe -o json client-1 | jq -r .private_net[0].ip`
+export CLIENT_2_IP_INTERNAL= # get it from the private network created, e.g. 10.0.0.6 from `hcloud server describe -o json client-2 | jq -r .private_net[0].ip`
 
 direnv allow
 ```
@@ -325,6 +353,7 @@ hashi-up consul install \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
   --server \
+  --bind-addr '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}' \
   --client-addr 0.0.0.0 \
   --bootstrap-expect 3 \
   --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
@@ -334,6 +363,7 @@ hashi-up consul install \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
   --server \
+  --bind-addr '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}' \
   --client-addr 0.0.0.0 \
   --bootstrap-expect 3 \
   --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
@@ -343,6 +373,7 @@ hashi-up consul install \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
   --server \
+  --bind-addr '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}' \
   --client-addr 0.0.0.0 \
   --bootstrap-expect 3 \
   --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
@@ -352,12 +383,14 @@ hashi-up consul install \
   --ssh-target-addr $CLIENT_1_IP \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
+  --bind-addr '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}' \
   --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
 
 hashi-up consul install \
   --ssh-target-addr $CLIENT_2_IP \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
+  --bind-addr '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}' \
   --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
 
 # Check that all services are up and consul is running:
@@ -380,6 +413,7 @@ hashi-up vault install \
     --ssh-target-user $SSH_USER \
     --ssh-target-key ~/.ssh/id_rsa \
     --storage consul \
+    --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}:8200' \
     --api-addr http://$SERVER_1_IP_INTERNAL:8200
 
 hashi-up vault install \
@@ -387,6 +421,7 @@ hashi-up vault install \
     --ssh-target-user $SSH_USER \
     --ssh-target-key ~/.ssh/id_rsa \
     --storage consul \
+    --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}:8200' \
     --api-addr http://$SERVER_2_IP_INTERNAL:8200
 
 hashi-up vault install \
@@ -394,6 +429,7 @@ hashi-up vault install \
     --ssh-target-user $SSH_USER \
     --ssh-target-key ~/.ssh/id_rsa \
     --storage consul \
+    --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}:8200' \
     --api-addr http://$SERVER_3_IP_INTERNAL:8200
 
 # Check that all services are up and consul is running for each server:
@@ -417,6 +453,7 @@ hashi-up nomad install \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
   --server \
+  --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}' \
   --bootstrap-expect 3
    
 hashi-up nomad install \
@@ -424,6 +461,7 @@ hashi-up nomad install \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
   --server \
+  --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}' \
   --bootstrap-expect 3
 
 hashi-up nomad install \
@@ -431,6 +469,7 @@ hashi-up nomad install \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
   --server \
+  --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}' \
   --bootstrap-expect 3
 
 # clients
@@ -439,12 +478,14 @@ hashi-up nomad install \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
   --client
+  --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}'
   
 hashi-up nomad install \
   --ssh-target-addr $CLIENT_2_IP \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
   --client
+  --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}'
 
 # check the cluster
 hcloud server ssh server-1
@@ -706,4 +747,19 @@ hcloud certificate list
 # proxy and health check
 hcloud load-balancer add-service lb-nomad --protocol https --http-redirect-http --proxy-protocol --http-certificates <certificate_id> # use the id from the step before
 hcloud load-balancer update-service lb-nomad --listen-port 443 --health-check-http-domain <example.com>
+```
+
+
+
+
+```sh
+hashi-up consul install \
+  --ssh-target-addr $SERVER_1_IP \
+  --ssh-target-user $SSH_USER \
+  --ssh-target-key ~/.ssh/id_rsa \
+  --server \
+  --bind-addr '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}'
+  --client-addr 0.0.0.0 \
+  --bootstrap-expect 3 \
+  --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
 ```
