@@ -3,11 +3,15 @@ version: '3'
 tasks:
   install:
     cmds:
+      - task: install-ssh-key
       - task: install-network
       - task: install-vms
       - task: install-firewall
       - task: apply-firewall-rules
       - task: get-ips
+  install-ssh-key:
+    cmds:
+      - hcloud ssh-key create --name home-cluster --public-key-from-file ~/.ssh/id_rsa.pub
   install-network:
     cmds:
       - echo "Creating private network"
@@ -16,7 +20,6 @@ tasks:
   install-vms:
     cmds:
       - echo "Creating virtual machines"
-      - hcloud ssh-key create --name home-cluster --public-key-from-file ~/.ssh/id_rsa.pub
       - hcloud placement-group create --name group-spread --type spread
       - hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-1 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
       - hcloud server create --datacenter fsn1-dc14 --type cx11 --name server-2 --image debian-10 --ssh-key home-cluster --network network-nomad --placement-group group-spread
