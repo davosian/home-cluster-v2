@@ -1,10 +1,11 @@
 job "traefik" {
   region      = "global"
   datacenters = ["dc1"]
-  type        = "system"
+  type        = "service"
 
   group "traefik" {
-    
+    count = 1
+
     network {
       port "http" {
         static = 8080
