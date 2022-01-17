@@ -1,10 +1,10 @@
 job "traefik" {
   region      = "global"
   datacenters = ["dc1"]
-  type        = "system"
+  type        = "service"
 
   group "traefik" {
-    // count = 1
+    count = 1
 
     network {
       port "http" {
@@ -32,7 +32,7 @@ job "traefik" {
       driver = "docker"
 
       config {
-        image        = "traefik:v2.5"
+        image        = "traefik:v2.2"
         network_mode = "host"
 
         volumes = [
