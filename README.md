@@ -419,7 +419,6 @@ hashi-up vault install \
     --ssh-target-user $SSH_USER \
     --ssh-target-key ~/.ssh/id_rsa \
     --storage consul \
-    --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}:8200' \
     --api-addr http://$SERVER_1_IP_INTERNAL:8200
 
 hashi-up vault install \
@@ -427,7 +426,6 @@ hashi-up vault install \
     --ssh-target-user $SSH_USER \
     --ssh-target-key ~/.ssh/id_rsa \
     --storage consul \
-    --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}:8200' \
     --api-addr http://$SERVER_2_IP_INTERNAL:8200
 
 hashi-up vault install \
@@ -435,12 +433,11 @@ hashi-up vault install \
     --ssh-target-user $SSH_USER \
     --ssh-target-key ~/.ssh/id_rsa \
     --storage consul \
-    --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}:8200' \
     --api-addr http://$SERVER_3_IP_INTERNAL:8200
 
-# Check that all services are up and consul is running for each server:
-hcloud server ssh server-x # replace x with 1 to 3
-systemctl status vault
+# Check that all services are up and vault is running in HA mode:
+hcloud server ssh server-1
+vault status -address=http://127.0.0.1:8200
 exit
 ```
 
@@ -459,7 +456,7 @@ hashi-up nomad install \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
   --server \
-  --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}' \
+  --advertise "{{ GetPrivateInterfaces | include \"network\" \"10.0.0.0/16\" | attr \"address\" }}" \
   --bootstrap-expect 3
    
 hashi-up nomad install \
@@ -467,7 +464,7 @@ hashi-up nomad install \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
   --server \
-  --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}' \
+  --advertise "{{ GetPrivateInterfaces | include \"network\" \"10.0.0.0/16\" | attr \"address\" }}" \
   --bootstrap-expect 3
 
 hashi-up nomad install \
@@ -475,28 +472,28 @@ hashi-up nomad install \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
   --server \
-  --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}' \
+  --advertise "{{ GetPrivateInterfaces | include \"network\" \"10.0.0.0/16\" | attr \"address\" }}" \
   --bootstrap-expect 3
 
 # clients
+# check the content of ./hashi-up/nomad-client.hcl first before applying the next command
 hashi-up nomad install \
   --ssh-target-addr $CLIENT_1_IP \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
-  --client
-  --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}'
+  --config-file ./hashi-up/nomad-client.hcl
   
+# check the content of ./hashi-up/nomad-client.hcl first before applying the next command
 hashi-up nomad install \
   --ssh-target-addr $CLIENT_2_IP \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
-  --client
-  --address '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}'
+  --config-file ./hashi-up/nomad-client.hcl
 
 # check the cluster
 hcloud server ssh server-1
-nomad server members
-nomad node status
+nomad server members -address=http://10.0.0.2:4646
+nomad node status -address=http://10.0.0.2:4646
 exit
 ```
 
@@ -511,7 +508,6 @@ Install docker for nomad to use on all clients:
 ```sh
 # connect to the client node
 hcloud server ssh client-x # replace x with 1 to 2
-
 curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 echo \
   "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian \
@@ -582,29 +578,28 @@ export ZT_CLIENT_2_IP=ZEROTIER_IP # get it at https://my.zerotier.com`
 
 Each node of the vault cluster has to be unsealed first before it can be used.
 
-On your host, connect to the ZeroTier network, then using your browser connect to the Vault UI for `server-1` at http://SERVER_IP_ZEROTIER:8200/.
+```sh
+# create the unseal keys
+hcloud server ssh server-1
+vault operator init -address=http://127.0.0.1:8200
+exit
+```
 
-Enter `5` for the `Key shares` and `3` for the `Key threshold`, then click on `Initialize`.
-
-On the next page, click on `Download keys` and store them in a password manager. Click on `Continue to Unseal`.
-
-The next few steps have to be repeated for each Vault node.
-
-Copy one of the `keys` (not `keys_base64`) and enter it in the `Master Key Portion` field. Click `Unseal` to proceed. Repeat until you have entered 3 keys.
-
-In order to unseal the vaults on each server, repeat the login steps for `server-2` and `server-3`.
-
-Optionally, after unsealing, you can enter the `root_token` from the password file and click on `Sign In` to get access to the web UI.
-
-When you are done, you should see that the Vault server status switched to green in the Consul web ui over at http://SERVER_IP_ZEROTIER:8500/.
-
-On the command line, you can now also check the vault status:
+Store the 5 unseal keys and the `Initial Root Token` in a password manager.
+In order to unseal the vaults on each server, repeat the following command for each server node. Enter one of the 5 keys and repeat three times with a different key each time.
 
 ```sh
-hcloud server ssh server-1
-export VAULT_ADDR='http://127.0.0.1:8200'
-vault status
+hcloud server ssh server-x # replace x with 1 to 3
+# run the command 3 times, use a different key each time. Note how the `Unseal Progress` counts up
+vault operator unseal -address=http://127.0.0.1:8200
+vault operator unseal -address=http://127.0.0.1:8200
+vault operator unseal -address=http://127.0.0.1:8200
+exit
 ```
+
+You should see that the `Sealed` status is now `false`.
+Repeat the unseal steps on each server node.
+
 
 ### Install the CLIs on the dev VM
 
@@ -627,12 +622,16 @@ curl -OL https://releases.hashicorp.com/vault/1.9.2/vault_1.9.2_linux_arm64.zip
 unzip vault_1.9.2_linux_arm64.zip
 sudo mv vault /usr/local/bin
 rm vault_1.9.2_linux_arm64.zip
+vault -autocomplete-install
+source ~/.bashrc
 vault -v
 
 curl -OL https://releases.hashicorp.com/consul/1.11.1/consul_1.11.1_linux_arm64.zip
 unzip consul_1.11.1_linux_arm64.zip
 sudo mv consul /usr/local/bin
 rm consul_1.11.1_linux_arm64.zip
+consul -autocomplete-install
+source ~/.bashrc
 consul -v
 ```
 
@@ -721,12 +720,12 @@ nomad run nomad/jobs/demo-webapp.nomad
 nomad run nomad/jobs/traefik.nomad
 
 # check that you can reach the traefik dashboard through curl or a local browser
-# use a ZT client ip to connect. If it is not working, try the other client IP
+# use a ZT client ip to connect
 curl -L http://$ZT_CLIENT_1_IP:8081
 
 # check that you can reach the load balanced app
-# again, experiment with all client ips
-# execute 6 times to see how the servers and/or ports change
+# use a ZT client ip to connect
+# execute 4 times to see how the servers and/or ports change
 curl http://$ZT_CLIENT_1_IP:8080/myapp
 
 # check that load balancing is working
