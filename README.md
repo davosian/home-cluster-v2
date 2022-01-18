@@ -756,11 +756,7 @@ hcloud load-balancer attach-to-network --network network-nomad --ip 10.0.0.254 l
 hcloud load-balancer add-target lb-nomad --server client-1 --use-private-ip
 hcloud load-balancer add-target lb-nomad --server client-2 --use-private-ip
 
-# manage certificates
-hcloud certificate create --domain $DOMAIN --type managed --name cert-t1
-hcloud certificate list
-
 # proxy and health check
-hcloud load-balancer add-service lb-nomad --protocol https --http-redirect-http --proxy-protocol --http-certificates <certificate_id> # use the id from the step before
-hcloud load-balancer update-service lb-nomad --listen-port 443 --health-check-http-domain $DOMAIN
+hcloud load-balancer add-service lb-nomad --protocol http --destination-port 8080
+hcloud load-balancer update-service lb-nomad --listen-port 80 --health-check-protocol tcp --health-check-port 8080
 ```
