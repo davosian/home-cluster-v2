@@ -60,6 +60,11 @@ job "traefik" {
     [providers.consulCatalog.endpoint]
       address = "127.0.0.1:8500"
       scheme  = "http"
+
+# Enable KV store in consul
+[providers.consul]
+    rootKey = "traefik"
+    endpoints = ["127.0.0.1:8500"]
 EOF
 
         destination = "local/traefik.toml"
