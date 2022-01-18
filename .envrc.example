@@ -20,3 +20,4 @@ export ZT_CLIENT_2_IP= # get it at https://my.zerotier.com`
 export VAULT_ADDR=http://$ZT_SERVER_1_IP:8200
 export CONSUL_HTTP_ADDR=http://$ZT_SERVER_1_IP:8500
 export NOMAD_ADDR=http://$ZT_SERVER_1_IP:4646
+export DOMAIN= # the domain name to use for your cluster

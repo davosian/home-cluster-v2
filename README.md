@@ -662,6 +662,9 @@ rm nomad-pack_0.0.1-techpreview1_linux_arm64.zip
 
 ### DNS setup
 
+> **Note**: this is currently not working consistently, because `/etc/resolv.conf` gets overriden after a server reboot, losing the localhost entry.
+> Maybe [this fixes it](https://musaamin.web.id/set-permanent-resolv-conf-ubuntu/) or [this](https://unix.stackexchange.com/questions/347425/make-dnsmasq-not-altering-resolv-conf)? Not tried yet...
+
 In order to resolve `.consul` domain names, we have to configure a local DNS server for each client node:
 
 ```sh
@@ -699,12 +702,21 @@ rev-server=10.0.0.0/8,127.0.0.1#8600
 # restart the service
 systemctl restart dnsmasq.service
 
+# stop systemd-resolved. 
+# Otherwise /etc/resolv.conf changes get reverted
+systemctl stop systemd-resolved
+systemctl disable systemd-resolved
+
 # test
 dig @127.0.0.1 -p 8600 consul.service.consul ANY
 curl -L http://consul.service.consul:8500
 ```
 
 Repeat above setup for all clients.
+
+### Backup before workload installation
+
+At this point, it is a good idea to create snapshots of the VMs using the [Hetzner Web UI](https://console.hetzner.cloud/). This way, it is easy to go back to this state should you have to start over.
 
 ### Ingress setup
 
@@ -729,7 +741,7 @@ curl -L http://$ZT_CLIENT_1_IP:8081
 curl http://$ZT_CLIENT_1_IP:8080/myapp
 
 # check that load balancing is working
-hcloud server ssh server-1
+hcloud server ssh client-1
 curl http://traefik.service.consul:8080/myapp
 ```
 
@@ -740,31 +752,15 @@ Prepare a load balancer to direct traffic to the servers.
 hcloud load-balancer create --type lb11 --location fsn1 --name lb-nomad
 hcloud load-balancer attach-to-network --network network-nomad --ip 10.0.0.254 lb-nomad
 
-# direct traffic to the server
-hcloud load-balancer add-target lb-nomad --server server-1 --use-private-ip
-hcloud load-balancer add-target lb-nomad --server server-2 --use-private-ip
-hcloud load-balancer add-target lb-nomad --server server-3 --use-private-ip
+# direct traffic to the client nodes
+hcloud load-balancer add-target lb-nomad --server client-1 --use-private-ip
+hcloud load-balancer add-target lb-nomad --server client-2 --use-private-ip
 
 # manage certificates
-hcloud certificate create --domain <example.com> --type managed --name cert-t1
+hcloud certificate create --domain $DOMAIN --type managed --name cert-t1
 hcloud certificate list
 
 # proxy and health check
 hcloud load-balancer add-service lb-nomad --protocol https --http-redirect-http --proxy-protocol --http-certificates <certificate_id> # use the id from the step before
-hcloud load-balancer update-service lb-nomad --listen-port 443 --health-check-http-domain <example.com>
-```
-
-
-
-
-```sh
-hashi-up consul install \
-  --ssh-target-addr $SERVER_1_IP \
-  --ssh-target-user $SSH_USER \
-  --ssh-target-key ~/.ssh/id_rsa \
-  --server \
-  --bind-addr '{{ GetPrivateInterfaces | include "network" "10.0.0.0/16" | attr "address" }}'
-  --client-addr 0.0.0.0 \
-  --bootstrap-expect 3 \
-  --retry-join $SERVER_1_IP_INTERNAL --retry-join $SERVER_2_IP_INTERNAL --retry-join $SERVER_3_IP_INTERNAL
+hcloud load-balancer update-service lb-nomad --listen-port 443 --health-check-http-domain $DOMAIN
 ```
