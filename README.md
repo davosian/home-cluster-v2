@@ -481,14 +481,14 @@ hashi-up nomad install \
   --ssh-target-addr $CLIENT_1_IP \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
-  --config-file ./hashi-up/nomad-client.hcl
+  --config-file ./nomad/config/nomad-client.hcl
   
 # check the content of ./hashi-up/nomad-client.hcl first before applying the next command
 hashi-up nomad install \
   --ssh-target-addr $CLIENT_2_IP \
   --ssh-target-user $SSH_USER \
   --ssh-target-key ~/.ssh/id_rsa \
-  --config-file ./hashi-up/nomad-client.hcl
+  --config-file ./nomad/config/nomad-client.hcl
 
 # check the cluster
 hcloud server ssh server-1
