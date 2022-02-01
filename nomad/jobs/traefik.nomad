@@ -41,28 +41,42 @@ job "traefik" {
       template {
         data = <<EOF
 [entryPoints]
-    [entryPoints.http]
-    address = ":8080"
-    [entryPoints.traefik]
-    address = ":8081"
+  [entryPoints.http]
+  address = ":8080"
+    [entryPoints.http.proxyProtocol]
+    trustedIPs = ["127.0.0.1/32","10.0.0.254"] # Hetzner
+    
+    [entryPoints.http.forwardedHeaders]
+    trustedIPs = ["127.0.0.1/32","10.0.0.254"] # Hetzner
+
+  [entryPoints.traefik]
+  address = ":8081"
+
+  [entryPoints.metrics]
+  address = ":8082"
 
 [api]
     dashboard = true
     insecure  = true
 
+# Enable prometheus metrics
+[metrics]
+  [metrics.prometheus]
+    entryPoint = "metrics"
+
 # Enable Consul Catalog configuration backend.
 [providers.consulCatalog]
-    prefix           = "traefik"
-    exposedByDefault = false
+  prefix           = "traefik"
+  exposedByDefault = false
 
-    [providers.consulCatalog.endpoint]
-      address = "127.0.0.1:8500"
-      scheme  = "http"
+  [providers.consulCatalog.endpoint]
+    address = "127.0.0.1:8500"
+    scheme  = "http"
 
 # Enable KV store in consul
 [providers.consul]
-    rootKey = "traefik"
-    endpoints = ["127.0.0.1:8500"]
+  rootKey = "traefik"
+  endpoints = ["127.0.0.1:8500"]
 EOF
 
         destination = "local/traefik.toml"
