@@ -21,10 +21,10 @@ In order to simplify setting up the cluster, some basic automation is being done
 - [X] VPN access to the cluster
 - [X] Initial configuration for Vault
 - [ ] Automate setup & provisioning with Task
-- [ ] Ingress setup
+- [X] Ingress setup
 - [ ] Test storage in nomad
 - [ ] Setup ingress with test load
-- 
+- [ ] Integrate Vault with Nomad
 
 
 ## References
@@ -745,7 +745,25 @@ hcloud server ssh client-1
 curl http://traefik.service.consul:8080/myapp
 ```
 
-Prepare a load balancer to direct traffic to the servers.
+Prepare a load balancer to direct traffic to the servers. We aim directly for https and will redirect all traffic to it. Since we are using a cloud load balancer, we terminate the TLS there and have only unencrypted traffic on the local network. This takes care of managing the TLS certificates for us and keeps the traefik configuration simple for now.
+
+Unfortunately, preparing creating the DNS zone cannot be done with `hcloud`. We will use the Hetzner web ui instead. Our steps are based on [these instructions](https://community.hetzner.com/tutorials/configure-lb-cert-with-external-domain).
+
+First, go to `https://dns.hetzner.com/` and click on `Add new zone`. Enter your domain name to use, select `Add records` and disable `Auto scanning for records`. Then click on `Continue`.
+
+From the next screen, delete the three `A`  and the `MX` record leaving only the `NS` records untouched. Click on `Continue`, then on `Finished, go to Dashboard`. You can ignore the warning that the nameservers need to be switched out since this is not needed in our case.
+
+Now log into your domain registrar so that you can add additional DNS records overthere. For me, the registrar is Cloudflare. Add the following `NS` records to your domain so that ACME challenges get routed correctly:
+
+```
+_acme-challenge -> pointing to oxygen.ns.hetzner.com
+_acme-challenge -> pointing to hydrogen.ns.hetzner.com
+_acme-challenge -> pointing to helium.ns.hetzner.de
+```
+
+These records should match what you see in Hetzners DNS configuration for your newly created zone. Adjust the `NS` entries here if necessary.
+
+The remaining steps create and configure our load balancer in Hetzner. For this we can leverage `hcloud` again:
 
 ```sh
 # create the loadbalancer
@@ -756,7 +774,19 @@ hcloud load-balancer attach-to-network --network network-nomad --ip 10.0.0.254 l
 hcloud load-balancer add-target lb-nomad --server client-1 --use-private-ip
 hcloud load-balancer add-target lb-nomad --server client-2 --use-private-ip
 
+# create wildcard certificate for load balancer and store its ID
+hcloud certificate create --name "testcert" --type managed --domain *.$DOMAIN --domain $DOMAIN
+CERT_ID=$(hcloud certificate describe "lb wildcard cert" -o json | jq '.id')
+
 # proxy and health check
-hcloud load-balancer add-service lb-nomad --protocol http --destination-port 8080
-hcloud load-balancer update-service lb-nomad --listen-port 80 --health-check-protocol tcp --health-check-port 8080
+hcloud load-balancer add-service lb-nomad --protocol https --http-redirect-http --proxy-protocol --http-certificates $CERT_ID --destination-port 8080
+hcloud load-balancer update-service lb-nomad --listen-port 443 --health-check-protocol tcp --health-check-port 8080 
+```
+
+Hetzner will manage the certificates, automatically renewing them as necessary (every three months for Let's Encrypt).
+
+Make sure to create `CNAME` entries for every service you deploy so it is reachable from externally like so:
+
+```
+CNAME subdomain -> points to $DOMAIN
 ```
