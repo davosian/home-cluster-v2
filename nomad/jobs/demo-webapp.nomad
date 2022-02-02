@@ -1,3 +1,7 @@
+variable "domain" {
+  type = string
+}
+
 job "demo-webapp" {
   datacenters = ["dc1"]
 
@@ -20,7 +24,7 @@ job "demo-webapp" {
 
       tags = [
         "traefik.enable=true",
-        "traefik.http.routers.http.rule=Path(`/myapp`)",
+        "traefik.http.routers.http.rule=Host(`webapp.${var.domain}`)",
       ]
 
       check {

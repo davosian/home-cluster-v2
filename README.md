@@ -914,7 +914,7 @@ hcloud load-balancer add-target lb-nomad --server client-1 --use-private-ip
 hcloud load-balancer add-target lb-nomad --server client-2 --use-private-ip
 
 # create wildcard certificate for load balancer and store its ID
-hcloud certificate create --name "testcert" --type managed --domain *.$DOMAIN --domain $DOMAIN
+hcloud certificate create --name "testcert" --type managed --domain *.$NOMAD_VAR_domain --domain $NOMAD_VAR_domain
 CERT_ID=$(hcloud certificate describe "lb wildcard cert" -o json | jq '.id')
 
 # proxy and health check
@@ -927,5 +927,29 @@ Hetzner will manage the certificates, automatically renewing them as necessary (
 Make sure to create `CNAME` entries for every service you deploy so it is reachable from externally like so:
 
 ```
-CNAME subdomain -> points to $DOMAIN
+CNAME subdomain -> points to $NOMAD_VAR_domain
+```
+
+### Using environment variables in Nomad jobs
+
+First, export environment variables on your `dev` VM. We are using the `.envrc` file for this.
+
+Important: the name of the environment variable has to start with `NOMAD_VAR_` followed by a lowercase name. Example:
+
+```sh
+export NOMAD_VAR_domain=example.com
+```
+
+Next, declare a `variable` stanza in your nomad job file above the actual job. The variable name has to match the one from the environment variable, but without the `NOMAD_VAR_` part. See `nomad/jobs/demo-webapp.nomad` for an example:
+
+```
+variable "domain" {
+  type = string
+}
+```
+
+Also in the job, use it in any string with the `${var.varname}` syntax:
+
+```
+"traefik.http.routers.http.rule=Host(`webapp.${var.domain}`)",
 ```
