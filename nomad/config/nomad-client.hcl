@@ -20,3 +20,12 @@ client {
   enabled = true
   network_interface = "ens10"
 }
+
+# this section was added manually
+# we refer to just one vault server right now since using dns with consul currently is not working
+# https://www.vaultproject.io/docs/configuration/service-registration/consul
+# should be changed to `vault.service.consul` later on
+vault {
+  enabled = true
+  address = "http://10.0.0.2:8200"
+}

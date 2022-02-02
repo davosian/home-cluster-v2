@@ -24,7 +24,7 @@ In order to simplify setting up the cluster, some basic automation is being done
 - [X] Ingress setup
 - [ ] Test storage in nomad
 - [ ] Setup ingress with test load
-- [ ] Integrate Vault with Nomad
+- [X] Integrate Vault with Nomad
 
 
 ## References
@@ -600,6 +600,145 @@ exit
 You should see that the `Sealed` status is now `false`.
 Repeat the unseal steps on each server node.
 
+Now set `VAULT_TOKEN` to the root token inside the `.envrc` file. If you do not want to persist this data for security reasons, do an `export VAULT_TOKEN=YOUR_ROOT_TOKEN` in the current shell so that is available for the rest of this configuration section.
+
+Next, integrate Vault with Nomad using token role based integration:
+
+```sh
+# Download the policy
+curl https://nomadproject.io/data/vault/nomad-server-policy.hcl -o vault/policies/nomad-server-policy.hcl -s -L
+
+# Write the policy to Vault
+vault policy write nomad-server vault/policies/nomad-server-policy.hcl
+
+# Download the token role
+curl https://nomadproject.io/data/vault/nomad-cluster-role.json -o vault/roles/nomad-cluster-role.json -s -L
+
+# Create the token role with Vault
+vault write /auth/token/roles/nomad-cluster @vault/roles/nomad-cluster-role.json
+
+# Retrieve a token for nomad to use in the policy
+vault token create -policy nomad-server -period 72h -orphan
+# Take note of the `token` value.
+```
+
+On each Nomad server, add the following section to the Nomad server configuration `/etc/nomad.d/nomad.hcl`.
+
+```json
+# this section was added manually
+vault {
+  enabled = true
+  address = "http://127.0.0.1:8200"
+  create_from_role = "nomad-cluster"
+}
+```
+
+Also, change the service which starts Nomad to include the environment variable `VAULT_TOKEN`:
+
+```
+# edit the service configuration
+vi /etc/systemd/system/nomad.service
+
+# add the following line directly under [Service]
+Environment="VAULT_TOKEN=TOKEN_FROM_COMMAND_ABOVE"
+
+# reload the configuration
+systemctl daemon-reload
+systemctl restart nomad.service
+systemctl status nomad.service
+```
+
+On each Nomad client, add the following section to the Nomad server configuration `/etc/nomad.d/nomad.hcl`.
+
+```json
+# this section was added manually
+vault {
+  enabled = true
+  address = "http://127.0.0.1:8200"
+}
+```
+
+Now reload the configuration
+
+```
+systemctl restart nomad.service
+systemctl status nomad.service
+```
+
+Next, we enable the KV secrets engine in Vault
+
+```sh
+vault secrets enable -version=2 kv
+```
+
+To use the secrets in a job, create a policy in vault specifically for that job and use it in your job description. Example:
+
+```sh
+# create a policy file like the example at vault/policies/demoapp.hcl
+# note that we have to include `data` in the path for KV version 2
+path "kv/data/*" {
+  capabilities = ["read"]
+}
+
+path "kv/data/demoapp/*" {
+  capabilities = ["create", "read", "update"]
+}
+
+# upload the policy
+vault policy write demoapp vault/policies/demoapp.hcl
+
+# check the policy
+vault policy read demoapp
+
+# create a secret that can be accessed through the new policy
+vault kv put kv/demoapp greeting="Hello, I'm a secret!"
+vault kv get kv/demoapp
+
+# update the nomad job file to link it to the policy
+# different levels are possible, e.g. the group level:
+group "demo" {
+    count = 2
+
+    vault {
+      policies  = ["demoapp"]
+    }
+    ...
+
+# update the nomad job file to use the secret, e.g. in a template
+# note that we have to include `data` in the path for KV version 2
+task "server" {
+
+      ...
+
+      template {
+        data   = <<EOF
+my secret: "{{ with secret "kv/data/demoapp" }}{{ .Data.data.greeting }}{{ end }}"
+EOF
+        destination = "local/demoapp.txt"
+      }
+    }
+```
+
+Run the job:
+
+```sh
+nomad job plan nomad/jobs/demo-webapp.nomad
+nomad job run -check-index 99999 nomad/jobs/demo-webapp.nomad
+```
+
+After running the job, you will find the secret file in the nomad web ui or from within the container:
+
+```sh
+# find the most recent allocation
+export ALLOCATION_ID=$(nomad job allocs -json demo-webapp | jq -r '.[0].ID')
+
+# get a shell for the `server` task
+nomad alloc exec -i -t -task server $ALLOCATION_ID /bin/sh
+
+# inside the shell, check the content of the secret file
+cat /local/demoapp.txt
+```
+
 
 ### Install the CLIs on the dev VM
 
@@ -747,7 +886,7 @@ curl http://traefik.service.consul:8080/myapp
 
 Prepare a load balancer to direct traffic to the servers. We aim directly for https and will redirect all traffic to it. Since we are using a cloud load balancer, we terminate the TLS there and have only unencrypted traffic on the local network. This takes care of managing the TLS certificates for us and keeps the traefik configuration simple for now.
 
-Unfortunately, preparing creating the DNS zone cannot be done with `hcloud`. We will use the Hetzner web ui instead. Our steps are based on [these instructions](https://community.hetzner.com/tutorials/configure-lb-cert-with-external-domain).
+Unfortunately, creating the DNS zone cannot be done with `hcloud`. We will use the Hetzner web ui instead. Our steps are based on [these instructions](https://community.hetzner.com/tutorials/configure-lb-cert-with-external-domain). In a future version, instead of using the web ui, the DNS API could be used instead to script and automate these steps: https://dns.hetzner.com/api-docs/#operation/CreateZone. In addition, Terraform could be used to automate the creation of Cloudflare `NS` records. This is something we do manually below.
 
 First, go to `https://dns.hetzner.com/` and click on `Add new zone`. Enter your domain name to use, select `Add records` and disable `Auto scanning for records`. Then click on `Continue`.
 

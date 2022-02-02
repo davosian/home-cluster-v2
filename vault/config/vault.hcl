@@ -17,3 +17,6 @@ listener "tcp" {
   address     = "0.0.0.0:8200"
   tls_disable = true
 }
+
+# manually added
+service_registration "consul" {}

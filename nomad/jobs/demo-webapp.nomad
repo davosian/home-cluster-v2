@@ -4,6 +4,10 @@ job "demo-webapp" {
   group "demo" {
     count = 2
 
+    vault {
+      policies  = ["demoapp"]
+    }
+
     network {
       port  "http"{
         to = -1
@@ -38,6 +42,13 @@ job "demo-webapp" {
       config {
         image = "hashicorp/demo-webapp-lb-guide"
         ports = ["http"]
+      }
+
+      template {
+        data   = <<EOF
+my secret: "{{ with secret "kv/data/demoapp" }}{{ .Data.data.greeting }}{{ end }}"
+EOF
+        destination = "local/demoapp.txt"
       }
     }
   }
