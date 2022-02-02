@@ -54,6 +54,13 @@ my secret: "{{ with secret "kv/data/demoapp" }}{{ .Data.data.greeting }}{{ end }
 EOF
         destination = "local/demoapp.txt"
       }
+
+      template {
+        data   = <<EOF
+my domain: {{key "config/domain"}}
+EOF
+        destination = "local/domain.txt"
+      }
     }
   }
 }

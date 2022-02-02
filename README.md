@@ -25,6 +25,7 @@ In order to simplify setting up the cluster, some basic automation is being done
 - [ ] Test storage in nomad
 - [ ] Setup ingress with test load
 - [X] Integrate Vault with Nomad
+- [X] Integrate Consul KV
 
 
 ## References
@@ -572,6 +573,51 @@ export ZT_SERVER_2_IP=ZEROTIER_IP # get it at https://my.zerotier.com`
 export ZT_SERVER_3_IP=ZEROTIER_IP # get it at https://my.zerotier.com`
 export ZT_CLIENT_1_IP=ZEROTIER_IP # get it at https://my.zerotier.com`
 export ZT_CLIENT_2_IP=ZEROTIER_IP # get it at https://my.zerotier.com`
+```
+
+### Consul KV integration
+
+You can create key/values with the consul web ui or with the commandline:
+
+```sh
+consul kv put config/domain example.com
+consul kv get config/domain
+```
+
+Now you can use it inside a nomad job like so:
+
+```
+task "server" {
+      
+      ...
+
+      template {
+        data   = <<EOF
+my domain: {{key "config/domain"}}
+EOF
+        destination = "local/domain.txt"
+      }
+    }
+```
+
+Run the job:
+
+```sh
+nomad job plan nomad/jobs/demo-webapp.nomad
+nomad job run -check-index 99999 nomad/jobs/demo-webapp.nomad
+```
+
+After running the job, you will find the `domain.txt` file in the nomad web ui or from within the container:
+
+```sh
+# find the most recent allocation
+export ALLOCATION_ID=$(nomad job allocs -json demo-webapp | jq -r '.[0].ID')
+
+# get a shell for the `server` task
+nomad alloc exec -i -t -task server $ALLOCATION_ID /bin/sh
+
+# inside the shell, check the content of the secret file
+cat /local/domain.txt
 ```
 
 ### Vault configuration
