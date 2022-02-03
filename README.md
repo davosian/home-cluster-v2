@@ -674,7 +674,7 @@ On each Nomad server, add the following section to the Nomad server configuratio
 # this section was added manually
 vault {
   enabled = true
-  address = "http://127.0.0.1:8200"
+  address = "http://active.vault.service.consul:8200"
   create_from_role = "nomad-cluster"
 }
 ```
@@ -700,7 +700,7 @@ On each Nomad client, add the following section to the Nomad server configuratio
 # this section was added manually
 vault {
   enabled = true
-  address = "http://127.0.0.1:8200"
+  address = "http://active.vault.service.consul:8200"
 }
 ```
 
@@ -847,23 +847,32 @@ rm nomad-pack_0.0.1-techpreview1_linux_arm64.zip
 
 ### DNS setup
 
-> **Note**: this is currently not working consistently, because `/etc/resolv.conf` gets overriden after a server reboot, losing the localhost entry.
-> Maybe [this fixes it](https://musaamin.web.id/set-permanent-resolv-conf-ubuntu/) or [this](https://unix.stackexchange.com/questions/347425/make-dnsmasq-not-altering-resolv-conf)? Not tried yet...
-
-In order to resolve `.consul` domain names, we have to configure a local DNS server for each client node:
+In order to resolve `.consul` domain names, we have to configure a local DNS server for each server and client node:
 
 ```sh
-# connect to the client node
-hcloud server ssh client-x # replace x with 1 to 2
+# connect to the node
+hcloud server ssh any-x # replace any with `client` or `server` and x with 1 to 3
 
-# add the localhost as nameserver
-vi /etc/resolv.conf
+# install dig (dnsutils), dnsmasq and resolvconf
+apt install -y dnsutils dnsmasq resolvconf
 
-# add as the first line
+# make sure resolvconf is started on boot
+systemctl start resolvconf.service
+systemctl enable resolvconf.service
+systemctl status resolvconf.service # active (exited) is ok
+
+# add the nameservers
+vi /etc/resolvconf/resolv.conf.d/base
+
+# add these lines:
+# redirect to dnsmasq
 nameserver 127.0.0.1
+# hetzner nameserver
+nameserver 185.12.64.1
+nameserver 185.12.64.2
 
-# install dig and dnsmasq
-apt install -y dnsutils dnsmasq
+# reload resolvconf
+resolvconf -u
 
 # configure dnsmasq
 vi /etc/dnsmasq.d/10-consul
@@ -877,7 +886,7 @@ server=/consul/127.0.0.1#8600
 #rev-server=0.0.0.0/8,127.0.0.1#8600
 rev-server=10.0.0.0/8,127.0.0.1#8600
 #rev-server=100.64.0.0/10,127.0.0.1#8600
-#rev-server=127.0.0.1/8,127.0.0.1#8600
+rev-server=127.0.0.1/8,127.0.0.1#8600
 #rev-server=169.254.0.0/16,127.0.0.1#8600
 #rev-server=172.16.0.0/12,127.0.0.1#8600
 #rev-server=192.168.0.0/16,127.0.0.1#8600
@@ -897,7 +906,7 @@ dig @127.0.0.1 -p 8600 consul.service.consul ANY
 curl -L http://consul.service.consul:8500
 ```
 
-Repeat above setup for all clients.
+Repeat above setup for all server and clients.
 
 ### Backup before workload installation
 

@@ -21,11 +21,8 @@ server {
 }
 
 # this section was added manually
-# we refer to just one vault server right now since using dns with consul currently is not working
-# https://www.vaultproject.io/docs/configuration/service-registration/consul
-# should be changed to `vault.service.consul` later on
 vault {
   enabled = true
-  address = "http://127.0.0.1:8200"
+  address = "http://active.vault.service.consul:8200"
   create_from_role = "nomad-cluster"
 }
