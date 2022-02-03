@@ -919,6 +919,9 @@ At this point, it is a good idea to create snapshots of the VMs using the [Hetzn
 Install and configure Traefik
 
 ```sh
+# initialize a kv store for traefik. Can be used to store the traefik config instead
+consul kv put traefik/
+
 # install a sample web app
 nomad run nomad/jobs/demo-webapp.nomad
 
