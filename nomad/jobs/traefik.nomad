@@ -44,10 +44,10 @@ job "traefik" {
   [entryPoints.http]
   address = ":8080"
     [entryPoints.http.proxyProtocol]
-    trustedIPs = ["127.0.0.1/32","10.0.0.254"] # Hetzner
+    trustedIPs = ["127.0.0.1/32","10.0.0.0/24","172.26.0.0/16"] # Hetzner, ZeroTier
     
     [entryPoints.http.forwardedHeaders]
-    trustedIPs = ["127.0.0.1/32","10.0.0.254"] # Hetzner
+    trustedIPs = ["127.0.0.1/32","10.0.0.0/24","172.26.0.0/16"] # Hetzner, ZeroTier
 
   [entryPoints.traefik]
   address = ":8081"
@@ -58,6 +58,9 @@ job "traefik" {
 [api]
     dashboard = true
     insecure  = true
+
+[log]
+  level = "INFO"
 
 # Enable prometheus metrics
 [metrics]
