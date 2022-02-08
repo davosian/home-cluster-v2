@@ -1,3 +1,7 @@
+variable "domain" {
+  type = string
+}
+
 job "whoami" {
   datacenters = ["dc1"]
   type        = "system"
@@ -15,7 +19,7 @@ job "whoami" {
 
       tags = [
         "traefik.enable=true",
-        "traefik.http.routers.whoami.rule=Host(`whoami.davosian.rocks`)",
+        "traefik.http.routers.whoami.rule=Host(`whoami.${var.domain}`)",
       ]
 
       check {
