@@ -24,7 +24,7 @@ job "demo-webapp" {
 
       tags = [
         "traefik.enable=true",
-        "traefik.http.routers.http.rule=Host(`webapp.${var.domain}`)",
+        "traefik.http.routers.demo.rule=Host(`webapp.${var.domain}`)",
       ]
 
       check {
