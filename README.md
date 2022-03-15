@@ -26,6 +26,7 @@ In order to simplify setting up the cluster, some basic automation is being done
 - [ ] Setup ingress with test load
 - [X] Integrate Vault with Nomad
 - [X] Integrate Consul KV
+- [ ] Set up observability stack (logs, traces, metrics)
 
 
 ## References
@@ -847,7 +848,28 @@ rm nomad-pack_0.0.1-techpreview1_linux_arm64.zip
 
 ### DNS setup
 
-In order to resolve `.consul` domain names, we have to configure a local DNS server for each server and client node:
+In order to resolve `.consul` domain names, we have to configure a local DNS server for each server and client node. But first, we need to configure docker on the clients to make sure that docker uses dnsmasq for resolving the `.consul` domain:
+
+```sh
+# connect to the node
+hcloud server ssh client-x # replace x with 1 to 2
+
+# create a docker configuration file `/etc/docker/daemon.json` with the following content:
+{
+  "dns": ["172.17.0.1"],
+  "bip": "172.17.0.1/24"
+}
+
+# restart the docker daemon
+systemctl restart docker.service
+
+# verify the configuration for the docker bridge network (subnet and gateway)
+docker network inspect bridge
+```
+
+Repeat above setup for all server and clients.
+
+Then we set up dnsmasq on all clients and servers:
 
 ```sh
 # connect to the node
@@ -867,6 +889,8 @@ vi /etc/resolvconf/resolv.conf.d/base
 # add these lines:
 # redirect to dnsmasq
 nameserver 127.0.0.1
+# clients only: add docker bridge - find ip with `route`
+nameserver 172.17.0.1
 # hetzner nameserver
 nameserver 185.12.64.1
 nameserver 185.12.64.2
@@ -904,6 +928,9 @@ systemctl disable systemd-resolved
 # test
 dig @127.0.0.1 -p 8600 consul.service.consul ANY
 curl -L http://consul.service.consul:8500
+
+# on the clients only, test that docker resolves dns to the bridge network `172.17.0.1`
+docker run --rm alpine cat /etc/resolv.conf
 ```
 
 Repeat above setup for all server and clients.
@@ -927,6 +954,8 @@ nomad run nomad/jobs/demo-webapp.nomad
 
 # install traefik as load balancer. Verify that the job gets deployed succesfully.
 nomad run nomad/jobs/traefik.nomad
+
+# Note: `network_mode` set to `host` allows traefik to use Consul for service discovery.
 
 # check that you can reach the traefik dashboard through curl or a local browser
 # use a ZT client ip to connect
@@ -1011,3 +1040,35 @@ Also in the job, use it in any string with the `${var.varname}` syntax:
 ```
 "traefik.http.routers.http.rule=Host(`webapp.${var.domain}`)",
 ```
+
+### Observability Stack
+
+#### Enable telemetry
+
+Add the following section to all nodes:
+
+```hcl
+telemetry {
+  collection_interval = "1s"
+  disable_hostname = true
+  prometheus_metrics = true
+  publish_allocation_metrics = true
+  publish_node_metrics = true
+}
+```
+
+Restart each of the nodes for the changes to take effect.
+
+#### Prometheus
+
+Make sure `prometheus.domain` is configured as CNAME in Cloudflare.
+
+Deploy the prometheus job with `nomad job plan` / `nomad job run` and verify that you can reach prometheus at `prometheus.domain`.
+
+#### Alertmanager
+
+#### Grafana
+
+#### Loki
+
+#### OpenTelemetry
