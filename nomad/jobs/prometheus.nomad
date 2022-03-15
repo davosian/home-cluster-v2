@@ -25,15 +25,47 @@ job "prometheus" {
     task "prometheus" {
       template {
         change_mode = "noop"
-        destination = "local/prometheus.yml"
+        destination = "local/webapp_alert.yml"
+        data = <<EOH
+---
+groups:
+- name: prometheus_alerts
+  rules:
+  - alert: Webapp down
+    expr: absent(up{job="podinfo"})
+    for: 10s
+    labels:
+      severity: critical
+    annotations:
+      description: "Our webapp is down."
+EOH
+      }
 
+      template {
+        change_mode = "noop"
+        destination = "local/prometheus.yml"
         data = <<EOH
 ---
 global:
   scrape_interval:     5s
   evaluation_interval: 5s
 
+alerting:
+  alertmanagers:
+  - consul_sd_configs:
+    - server: 'consul.service.consul:8500'
+      services: ['alertmanager']
+
+rule_files:
+  - "webapp_alert.yml"
+
 scrape_configs:
+
+  - job_name: 'alertmanager'
+
+    consul_sd_configs:
+    - server: 'consul.service.consul:8500'
+      services: ['alertmanager']
 
   - job_name: 'nomad_metrics'
 
@@ -50,6 +82,14 @@ scrape_configs:
     metrics_path: /v1/metrics
     params:
       format: ['prometheus']
+
+  - job_name: 'podinfo'
+
+    consul_sd_configs:
+    - server: 'consul.service.consul:8500'
+      services: ['podinfo']
+
+    metrics_path: /metrics
 EOH
       }
 
@@ -60,6 +100,7 @@ EOH
         ports = ["prometheus_ui"]
 
         volumes = [
+          "local/webapp_alert.yml:/etc/prometheus/webapp_alert.yml",
           "local/prometheus.yml:/etc/prometheus/prometheus.yml",
         ]
 

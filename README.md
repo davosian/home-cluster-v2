@@ -1063,9 +1063,15 @@ Restart each of the nodes for the changes to take effect.
 
 Make sure `prometheus.domain` is configured as CNAME in Cloudflare.
 
-Deploy the prometheus job with `nomad job plan` / `nomad job run` and verify that you can reach prometheus at `prometheus.domain`.
+Deploy the prometheus job with `nomad job plan nomad/jobs/prometheus.nomad` / `nomad job run -check-index ...` and verify that you can reach prometheus at `prometheus.domain`.
 
 #### Alertmanager
+
+Make sure `alertmanager.domain` is configured as CNAME in Cloudflare.
+
+Deploy the alertmanager job with `nomad job plan nomad/jobs/alertmanager.nomad` / `nomad job run -check-index ...` and verify that you can reach alertmanager at `alertmanager.domain`.
+
+If not done so already, also deploy the prometheus job as it contains integration information for alertmanager with an example for monitoring the `podinfo` job. If `podinfo` is not running, you should find an active alert in prometheus and also see that alertmanager has received this alert.
 
 #### Grafana
 
