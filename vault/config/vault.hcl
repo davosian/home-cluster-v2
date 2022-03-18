@@ -16,7 +16,19 @@ api_addr = "http://10.0.0.2:8200"
 listener "tcp" {
   address     = "0.0.0.0:8200"
   tls_disable = true
+
+  # manually added
+  telemetry {
+    unauthenticated_metrics_access = true
+  }
 }
 
 # manually added
-service_registration "consul" {}
+service_registration "consul" {
+  service_tags = "http,controlplane"
+}
+
+telemetry {
+  prometheus_retention_time = "30s"
+  disable_hostname = true
+}
