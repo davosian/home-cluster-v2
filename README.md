@@ -1082,6 +1082,12 @@ If not done so already, also deploy the prometheus job as it contains integratio
 
 #### Grafana
 
+Make sure `grafana.domain` is configured as CNAME in Cloudflare.
+
+Deploy the grafana job with `nomad job plan nomad/jobs/grafana.nomad` / `nomad job run -check-index ...` and verify that you can reach prometheus at `grafana.domain`.
+
+Verify that 3 dashboards got deployed: Nomad Cluster, Nomad Services and Traefik.
+
 #### Loki
 
 #### OpenTelemetry
