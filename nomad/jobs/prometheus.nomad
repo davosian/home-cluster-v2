@@ -1,3 +1,7 @@
+variable "domain" {
+  type = string
+}
+
 job "prometheus" {
   datacenters = ["dc1"]
   type        = "service"
@@ -113,7 +117,7 @@ EOH
 
         tags = [
           "traefik.enable=true",
-          "traefik.http.routers.prometheus.rule=Host(`prometheus.davosian.rocks`)",
+          "traefik.http.routers.prometheus.rule=Host(`prometheus.${var.domain}`)",
         ]
 
         check {
