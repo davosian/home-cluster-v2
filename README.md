@@ -840,10 +840,10 @@ Install Nomad Pack
 
 ```sh
 cd ~/dl
-curl -OL https://github.com/hashicorp/nomad-pack/releases/download/nightly/nomad-pack_0.0.1-techpreview1_linux_arm64.zip
-unzip nomad-pack_0.0.1-techpreview1_linux_arm64.zip
+curl -OL https://github.com/hashicorp/nomad-pack/releases/download/nightly/nomad-pack_0.0.1-techpreview3_linux_arm64.zip
+unzip nomad-pack_0.0.1-techpreview3_linux_arm64.zip
 sudo mv nomad-pack /usr/local/bin
-rm nomad-pack_0.0.1-techpreview1_linux_arm64.zip
+rm nomad-pack_0.0.1-techpreview3_linux_arm64.zip
 ```
 
 ### DNS setup
