@@ -61,9 +61,8 @@ scrape_configs:
         replacement: "prometheus"
 
   - job_name: "traefik"
-    metrics_path: /
     static_configs:
-      - targets: ["traefik.{{ key "config/domain" }}:8082"]
+      - targets: ["traefik.service.consul:8082"]
     relabel_configs:
       - target_label: instance
         replacement: "loadbalancer"
