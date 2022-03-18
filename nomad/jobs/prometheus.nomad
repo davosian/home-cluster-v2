@@ -4,9 +4,13 @@ variable "domain" {
 
 job "prometheus" {
   datacenters = ["dc1"]
-  type        = "service"
+  
+  update {
+    stagger      = "30s"
+    max_parallel = 1
+  }
 
-  group "monitoring" {
+  group "prometheus" {
     count = 1
 
     network {
@@ -23,92 +27,36 @@ job "prometheus" {
     }
 
     ephemeral_disk {
-      size = 300
+      size    = 600
+      migrate = true
     }
 
     task "prometheus" {
-      template {
-        change_mode = "noop"
-        destination = "local/webapp_alert.yml"
-        data = <<EOH
----
-groups:
-- name: prometheus_alerts
-  rules:
-  - alert: Webapp down
-    expr: absent(up{job="podinfo"})
-    for: 10s
-    labels:
-      severity: critical
-    annotations:
-      description: "Our webapp is down."
-EOH
-      }
-
-      template {
-        change_mode = "noop"
-        destination = "local/prometheus.yml"
-        data = <<EOH
----
-global:
-  scrape_interval:     5s
-  evaluation_interval: 5s
-
-alerting:
-  alertmanagers:
-  - consul_sd_configs:
-    - server: 'consul.service.consul:8500'
-      services: ['alertmanager']
-
-rule_files:
-  - "webapp_alert.yml"
-
-scrape_configs:
-
-  - job_name: 'alertmanager'
-
-    consul_sd_configs:
-    - server: 'consul.service.consul:8500'
-      services: ['alertmanager']
-
-  - job_name: 'nomad_metrics'
-
-    consul_sd_configs:
-    - server: 'consul.service.consul:8500'
-      services: ['nomad-client', 'nomad']
-
-    relabel_configs:
-    - source_labels: ['__meta_consul_tags']
-      regex: '(.*)http(.*)'
-      action: keep
-
-    scrape_interval: 5s
-    metrics_path: /v1/metrics
-    params:
-      format: ['prometheus']
-
-  - job_name: 'podinfo'
-
-    consul_sd_configs:
-    - server: 'consul.service.consul:8500'
-      services: ['podinfo']
-
-    metrics_path: /metrics
-EOH
-      }
-
       driver = "docker"
+
+      artifact {
+        # Double slash required to download just the specified subdirectory, see:
+        # https://github.com/hashicorp/go-getter#subdirectories
+        source = "git::https://github.com/davosian/home-cluster-v2.git//nomad/jobs/artifacts/prometheus"
+      }
 
       config {
         image = "prom/prometheus:latest"
         ports = ["prometheus_ui"]
 
-        volumes = [
-          "local/webapp_alert.yml:/etc/prometheus/webapp_alert.yml",
-          "local/prometheus.yml:/etc/prometheus/prometheus.yml",
+        cap_drop = [
+          "ALL",
         ]
 
+        volumes = [
+          "local/webapp_alert.yml:/etc/prometheus/webapp_alert.yml:ro",
+          "local/prometheus.yml:/etc/prometheus/prometheus.yml:ro",
+        ]
+      }
 
+      resources {
+        cpu    = 100
+        memory = 100
       }
 
       service {
@@ -116,8 +64,16 @@ EOH
         port = "prometheus_ui"
 
         tags = [
+          "http",
+
           "traefik.enable=true",
           "traefik.http.routers.prometheus.rule=Host(`prometheus.${var.domain}`)",
+
+          // See: https://docs.traefik.io/routing/services/
+          "traefik.http.services.prometheus.loadbalancer.sticky=true",
+          "traefik.http.services.prometheus.loadbalancer.sticky.cookie.httponly=true",
+          // "traefik.http.services.prometheus.loadbalancer.sticky.cookie.secure=true",
+          "traefik.http.services.prometheus.loadbalancer.sticky.cookie.samesite=strict",
         ]
 
         check {
@@ -127,6 +83,20 @@ EOH
           interval = "10s"
           timeout  = "2s"
         }
+      }
+
+      template {
+        source        = "local/prometheus.yml.tpl"
+        destination   = "local/prometheus.yml"
+        change_mode   = "signal"
+        change_signal = "SIGHUP"
+      }
+      
+      template {
+        source        = "local/webapp_alert.yml.tpl"
+        destination   = "local/webapp_alert.yml"
+        change_mode   = "signal"
+        change_signal = "SIGHUP"
       }
     }
   }
