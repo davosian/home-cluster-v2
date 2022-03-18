@@ -10,7 +10,7 @@ datasources:
     type: prometheus
     access: direct
     orgId: 1
-    url: https://prometheus.${var.domain}
+    url: https://prometheus.{{ env NOMAD_VAR_domain }}
     user:
     password:
     database:
