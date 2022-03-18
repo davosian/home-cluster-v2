@@ -1064,7 +1064,13 @@ Restart each of the nodes for the changes to take effect.
 
 Make sure `prometheus.domain` is configured as CNAME in Cloudflare.
 
+Make sure a valid KV entry for `config/domain` exists in Consul.
+
+Make sure the vault configuration over at `/etc/vault.d/vault.hcl` matches the configuration from this repository at `vault/config/vault.hcl` since a few entries have been added to enable prometheus telemetry.
+
 Deploy the prometheus job with `nomad job plan nomad/jobs/prometheus.nomad` / `nomad job run -check-index ...` and verify that you can reach prometheus at `prometheus.domain`.
+
+Also deploy `consul-exporter.nomad`.
 
 #### Alertmanager
 
