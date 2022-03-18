@@ -61,8 +61,9 @@ scrape_configs:
         replacement: "prometheus"
 
   - job_name: "traefik"
-    static_configs:
-      - targets: ["traefik.service.consul:8082"]
+    consul_sd_configs:
+      - server: "consul.service.consul:8500"
+        services: ["traefik"]
     relabel_configs:
       - target_label: instance
         replacement: "loadbalancer"
