@@ -62,7 +62,7 @@ scrape_configs:
 
   - job_name: "traefik"
     static_configs:
-      - targets: ["traefik.{{ key \"config/domain\" }}:8080"]
+      - targets: ["traefik.{{ key 'config/domain' }}:8080"]
     relabel_configs:
       - target_label: instance
         replacement: "loadbalancer"
