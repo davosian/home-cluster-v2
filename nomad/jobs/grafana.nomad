@@ -41,10 +41,7 @@ job "grafana" {
       }
 
       artifact {
-        # Double slash required to download just the specified subdirectory, see:
-        # https://github.com/hashicorp/go-getter#subdirectories
-        source = "git::https://github.com/davosian/home-cluster-v2.git//nomad/jobs/templates/grafana/datasources/datasources.yaml.tpl"
-        destination = "local/datasources.yaml.tpl"
+        source = "https://raw.githubusercontent.com/davosian/home-cluster-v2/main/nomad/jobs/templates/grafana/datasources/datasources.yaml.tpl"
       }
 
       template {
@@ -93,7 +90,7 @@ job "grafana" {
         tags = [
           "http",
           "traefik.enable=true",
-          "traefik.http.routers.prometheus.rule=Host(`prometheus.${var.domain}`)",
+          "traefik.http.routers.grafana.rule=Host(`grafana.${var.domain}`)",
         ]
         port = "http"
 
