@@ -81,13 +81,37 @@ In case you want to manually perform the steps, follow them in the sections belo
 
 ### Provision the local environment
 
+We are using [1Password](https://www.1password.com) to maintain all passwords. Feel free to switch to an alternative option like [pass](https://www.passwordstore.org). This allows us to never store any sensitive information in files and makes it easy to share our configuration on github. The only downside is that loading the environment variables takes a few seconds and requires an internet connection.
+
 ```sh
 # update the system
 sudo apt update && sudo apt upgrade
 sudo apt install -y unzip direnv neovim
 
-# create a ssh key without passphrase for convenience
-ssh-keygen
+# install 1password cli
+curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
+ sudo gpg --dearmor --output /usr/share/keyrings/1password-archive-keyring.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/1password-archive-keyring.gpg] https://downloads.1password.com/linux/debian/$(dpkg --print-architecture) stable main" |
+ sudo tee /etc/apt/sources.list.d/1password.list
+sudo mkdir -p /etc/debsig/policies/AC2D62742012EA22/
+curl -sS https://downloads.1password.com/linux/debian/debsig/1password.pol | \
+ sudo tee /etc/debsig/policies/AC2D62742012EA22/1password.pol
+sudo mkdir -p /usr/share/debsig/keyrings/AC2D62742012EA22
+curl -sS https://downloads.1password.com/linux/keys/1password.asc | \
+ sudo gpg --dearmor --output /usr/share/debsig/keyrings/AC2D62742012EA22/debsig.gpg
+sudo apt update && sudo apt install 1password-cli
+
+# verify 1password installation
+op --version
+
+# add 1password account
+op account add
+
+# login to 1password (valid for 30 minutes)
+eval $(op signin)
+
+# add bash completion
+echo "source <(op completion bash)" >> ~/.bashrc
 
 # configure direnv
 # add to the bottom of ~/.bashrc
@@ -99,6 +123,9 @@ source ~/.bashrc
 # prepare the environment
 cp .envrc.example .envrc
 direnv allow
+
+# create a ssh key without passphrase for convenience
+ssh-keygen
 ```
 
 ### Prepare the cloud integration
