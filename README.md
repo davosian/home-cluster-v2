@@ -1111,7 +1111,47 @@ If not done so already, also deploy the prometheus job as it contains integratio
 
 Make sure `grafana.domain` is configured as CNAME in Cloudflare.
 
-Deploy the grafana job with `nomad job plan nomad/jobs/grafana.nomad` / `nomad job run -check-index ...` and verify that you can reach prometheus at `grafana.domain`.
+Create two secrets in vault:
+
+```sh
+vault kv put kv/grafana admin_user=MYUSER admin_pw="MYPASSWORD"
+```
+
+To persist the data, we are using host volumes on our gluster filesystem. Make sure your nomad client configuration is aware of the volume:
+
+```json
+  host_volume "grafana" {
+    path = "/mnt/gluster-nomad/volumes/grafana"
+  }
+```
+
+Make sure this folder exists, then restart all the nomad clients. Verify that they are aware of the volumes by making sure the following command lists the volume:
+
+```sh
+nomad node status -short -self
+```
+
+Now we need to create the following folder structure and copy the files over from this repo:
+
+```
+└── volumes
+    └── grafana
+        ├── grafana.ini
+        └── provisioning
+            ├── dashboards
+            │   ├── dashboards.yaml
+            │   ├── nomad-cluster.json
+            │   ├── nomad-jobs.json
+            │   └── traefik.json
+            ├── datasources
+            │   └── datasources.yaml
+            ├── notifiers
+            └── plugins
+```
+
+Also, inside the `datasources.yaml` file, we need to manually replace `{{ key "config/domain" }}` with the correct domain name. Since this file lives outside the allocation directory, we cannot use the template function to copy the final file over.
+
+Now deploy the grafana job with `nomad job plan nomad/jobs/grafana.nomad` / `nomad job run -check-index ...` and verify that you can reach prometheus at `grafana.domain`.
 
 Verify that 3 dashboards got deployed: Nomad Cluster, Nomad Services and Traefik.
 

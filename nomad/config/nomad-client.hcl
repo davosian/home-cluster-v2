@@ -19,6 +19,10 @@ advertise {
 client {
   enabled = true
   network_interface = "ens10"
+
+  host_volume "grafana" {
+    path = "/mnt/gluster-nomad/volumes/grafana"
+  }
 }
 
 # this section was added manually

@@ -8,7 +8,7 @@ deleteDatasources:
 datasources:
   - name: prometheus
     type: prometheus
-    access: direct
+    access: proxy
     orgId: 1
     url: https://prometheus.{{ key "config/domain" }}
     user:

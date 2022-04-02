@@ -1,35 +1,4 @@
 {
-  "__inputs": [
-    {
-      "name": "DS_PROMETHEUS",
-      "label": "prometheus",
-      "description": "",
-      "type": "datasource",
-      "pluginId": "prometheus",
-      "pluginName": "Prometheus"
-    }
-  ],
-  "__elements": [],
-  "__requires": [
-    {
-      "type": "grafana",
-      "id": "grafana",
-      "name": "Grafana",
-      "version": "8.4.4"
-    },
-    {
-      "type": "datasource",
-      "id": "prometheus",
-      "name": "Prometheus",
-      "version": "1.0.0"
-    },
-    {
-      "type": "panel",
-      "id": "timeseries",
-      "name": "Time series",
-      "version": ""
-    }
-  ],
   "annotations": {
     "list": [
       {
@@ -54,16 +23,12 @@
   "fiscalYearStartMonth": 0,
   "gnetId": 6281,
   "graphTooltip": 0,
-  "id": null,
-  "iteration": 1647643820420,
+  "id": 2,
+  "iteration": 1647678747596,
   "links": [],
   "liveNow": false,
   "panels": [
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -140,6 +105,10 @@
       "repeatDirection": "v",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "expr": "avg(nomad_client_allocs_cpu_total_percent{instance=~\"$instance\"}) by(exported_job, task)",
           "format": "time_series",
           "interval": "",
@@ -152,10 +121,6 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -232,6 +197,10 @@
       "repeatDirection": "v",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "expr": "avg(nomad_client_allocs_cpu_total_ticks{instance=~\"$instance\"}) by(exported_job, task)",
           "format": "time_series",
           "interval": "",
@@ -244,10 +213,6 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -324,6 +289,10 @@
       "repeatDirection": "v",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "expr": "avg(nomad_client_allocs_memory_rss{instance=~\"$instance\"}) by(exported_job, task)",
           "format": "time_series",
           "interval": "",
@@ -336,10 +305,6 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "${DS_PROMETHEUS}"
-      },
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -416,6 +381,10 @@
       "repeatDirection": "v",
       "targets": [
         {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "P1809F7CD0C75ACF3"
+          },
           "expr": "avg(nomad_client_allocs_memory_cache{instance=~\"$instance\"}) by(exported_job, task)",
           "format": "time_series",
           "interval": "",
@@ -434,10 +403,10 @@
   "templating": {
     "list": [
       {
-        "current": {},
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
+        "current": {
+          "selected": false,
+          "text": "dc1",
+          "value": "dc1"
         },
         "definition": "",
         "hide": 0,
@@ -460,10 +429,10 @@
         "useTags": false
       },
       {
-        "current": {},
-        "datasource": {
-          "type": "prometheus",
-          "uid": "${DS_PROMETHEUS}"
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
         },
         "definition": "",
         "hide": 0,

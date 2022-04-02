@@ -13,9 +13,13 @@ job "grafana" {
   group "grafana" {
     count = 1
 
-    ephemeral_disk {
-      size    = 300
-      migrate = true
+    volume "grafana" {
+      type            = "host"
+      source          = "grafana"
+    }
+
+    vault {
+      policies  = ["grafana"]
     }
 
     restart {
@@ -40,44 +44,53 @@ job "grafana" {
         source = "git::https://github.com/davosian/home-cluster-v2.git//nomad/jobs/artifacts/grafana"
       }
 
-      artifact {
-        source = "https://raw.githubusercontent.com/davosian/home-cluster-v2/main/nomad/jobs/templates/grafana/datasources/datasources.yaml.tpl"
-      }
-
       template {
-        source        = "local/datasources.yaml.tpl"
+        source        = "local/provisioning/datasources/datasources.yaml.tpl"
         destination   = "local/provisioning/datasources/datasources.yaml"
       }
 
-      // dynamic "template" {
-      //   for_each = fileset(".", "{config,users}.d/*.yml")
+      template {
+        # result of data template will be populated in this file
+        destination = "secrets/vars.env"
+        # all key/value pairs read will be exposed as environment variables to the frontend task
+        env = true
+        # read secret from Vault
+        data = <<EOH
+{{with secret "kv/grafana"}}
+GF_SECURITY_ADMIN_USER={{.Data.data.admin_user | toJSON}}
+GF_SECURITY_ADMIN_PASSWORD={{.Data.data.admin_pw | toJSON}}
+{{end}}
+EOH
+      }
 
-      //   content {
-      //     data        = file(template.value)
-      //     destination = "local/${template.value}"
-      //     change_mode = "noop"
-      //   }
-      // }
+      volume_mount {
+        volume      = "grafana"
+        destination = "/etc/grafana"
+        // read_only = true
+      }
 
       config {
-        image = "grafana/grafana:8.4.4"
+        image = "grafana/grafana:8.4.5"
 
         cap_drop = [
           "ALL",
         ]
 
-        volumes = [
-          "local:/etc/grafana:ro",
-        ]
+        // volumes = [
+        //   "grafana:/etc/grafana:ro",
+        // ]
 
         ports = ["http"]
       }
 
       env {
-        GF_INSTALL_PLUGINS           = "grafana-piechart-panel"
-        GF_SERVER_ROOT_URL           = "https://grafana.${var.domain}"
-        GF_SECURITY_ADMIN_PASSWORD   = "admin"
+        GF_ANALYTICS_REPORTING_ENABLED = "false"
+        GF_PATHS_PROVISIONING = "/etc/grafana/provisioning/"
+        GF_INSTALL_PLUGINS = "grafana-piechart-panel"
+        GF_SERVER_ROOT_URL = "https://grafana.${var.domain}"
         GF_SECURITY_DISABLE_GRAVATAR = "true"
+        GF_USERS_ALLOW_SIGN_UP = "false"
+        GF_USERS_ALLOW_ORG_CREATE = "false"
       }
 
       resources {
