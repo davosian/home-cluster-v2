@@ -24,7 +24,7 @@
   "gnetId": 6278,
   "graphTooltip": 1,
   "id": 1,
-  "iteration": 1648938855102,
+  "iteration": 1648941732068,
   "links": [],
   "liveNow": false,
   "panels": [
@@ -806,7 +806,7 @@
       },
       {
         "current": {
-          "selected": true,
+          "selected": false,
           "text": "client-1",
           "value": "client-1"
         },
@@ -864,6 +864,6 @@
   "timezone": "",
   "title": "Nomad Cluster",
   "uid": "CiP3mZVik",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }
