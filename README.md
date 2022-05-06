@@ -1069,6 +1069,18 @@ Also in the job, use it in any string with the `${var.varname}` syntax:
 "traefik.http.routers.http.rule=Host(`webapp.${var.domain}`)",
 ```
 
+### Upgrading Nomad
+
+The steps are simple: stop the `nomad` service, find the latest binary on https://releases.hashicorp.com/nomad/ and replace the existing one. Then restart the service and make sure all servers are happy.
+
+Upgrade one server at a time, starting with the servers, followed by the clients.
+
+Before upgrading, check whether special tasks are required for the particular upgrade: https://www.nomadproject.io/docs/upgrade/upgrade-specific. In general, point releases (e.g. from 0.10 to 0.11) are only supported, so ideally take one step at a time.
+
+```sh
+curl -OL https://releases.hashicorp.com/nomad/1.2.6/nomad_1.2.6_linux_amd64.zip
+```
+
 ### Observability Stack
 
 #### Enable telemetry
