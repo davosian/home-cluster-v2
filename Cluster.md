@@ -266,7 +266,7 @@ Save the user, password, token id and token secret in 1Password at `Proxmox Terr
 ### Create the VMs
 
 ```sh
-cd terraform/
+cd terraform/cluster
 terraform init
 terraform plan
 terraform apply
